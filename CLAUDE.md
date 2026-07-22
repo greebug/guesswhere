@@ -9,25 +9,30 @@ architecture, settled decisions, and phase breakdown.
 these — `etl/cities.sqlite` and `matching/` are the finished, validated artifacts.
 
 **Phase 3 (game client, in `web/`): core solo loop works end-to-end**, verified through
-the real running UI — new game, guess/reveal/report, correct-count tracking, all of it.
-Not yet built: phase 4 (leaderboards), phase 5 (multiplayer).
+the real running UI — new game, guess/reveal/report, correct-count tracking, an "Only
+Coast" filter (`etl/add-coastal-distance.js` computes `dist_to_coast_km` per city
+against Natural Earth's coastline data), all of it.
 
-**Immediate next step, already decided, not yet started:** get the app hosted live
-*before* building multiplayer, not after — multiplayer needs real shared/persisted
-session state and two actual separate browsers to test against, so a local-only
-prototype would just need reworking once hosted. Agreed sequence:
-1. Move tile serving onto **Cloudflare R2 + Protomaps' own ready-made Cloudflare Worker**
-   (`docs.protomaps.com/deploy/cloudflare`) — documented, purpose-built, do not
-   reinvent this. Retires `web/app/api/tiles/[file]/route.ts` entirely.
-2. Replace `web/lib/server/gameStore.ts`'s in-memory `Map` with a real persisted store
-   (a second small SQLite file is enough). Needed for hosting reliability regardless,
-   and it's the same piece multiplayer needs for shared state.
-3. Pick an app host — leaning **Railway** (runs a normal persistent Node process, so
-   `node:sqlite` and everything else works with zero porting) over Vercel (serverless,
-   would need step 2 done first anyway). Not yet confirmed with the user.
-4. *Then* build phase 5 against the live target, using the duels-mode spec already
-   captured in `PLAN.md` (5-min timer + auto-skip, mutual skip-vote distinct from
-   Report Round, "first to N" instead of fixed 10 rounds).
+**Hosting: done and live.** `guesswhere-production.up.railway.app` on Railway (a
+Dockerfile, not Nixpacks/Railpack — both were tried first and hit real problems, see
+git history on `Dockerfile`/commit messages if curious). Tiles serve from Cloudflare R2
+via the Protomaps Worker at `tiles.bingbongblitz.com` (`cloudflare/pmtiles-worker/`) —
+`web/app/api/tiles/[file]/route.ts` is retired. `web/lib/server/gameDb.ts` persists
+game sessions (and duel lobbies) to a SQLite file at `GAME_DB_PATH`, replacing the old
+in-memory `Map`.
+
+**Phase 5 (multiplayer): done.** Two modes:
+- **Party link** — any solo game URL is already shared-by-link; `PlayClient.tsx` polls
+  every ~2s so a friend's progress shows up live. No lobby, no scoring.
+- **Duels** — `/duel/new` creates a named lobby (host picks timer length, target
+  round-wins, population/coast filters), `/duel/[lobbyId]` handles join → countdown →
+  synchronized play → win. Server-authoritative via absolute deadline timestamps +
+  tick-on-read (`web/lib/server/duelLogic.ts`), clients poll `GET .../state` every
+  ~750ms rather than WebSockets (Railway's persistent process makes WS *possible*, but
+  polling needed zero infra changes and is plenty responsive at this game's pace).
+
+**Not yet built:** phase 4 (accounts + persistent leaderboards — duels currently has no
+accounts, identity is a `playerId` cached in `localStorage` per lobby).
 
 **Known environment quirk, not a code bug:** the sandboxed browser preview tab used for
 testing reports `document.hidden = true`, which throttles the rendering loop both
@@ -64,7 +69,9 @@ The entire project exists because the original game got this wrong.
 
 - Windows, PowerShell primary. Bash tool available for POSIX scripts.
 - `python` is only the Microsoft Store stub — **not installed**. Use Node + DuckDB for ETL.
-- Node and git are available. Repo is not yet git-initialized.
+- Node and git are available. Repo is git-initialized, pushed to
+  `github.com/greebug/guesswhere`, deployed via Railway (auto-deploys on push to
+  `master`).
 
 ### Bulk data lives OUTSIDE OneDrive
 
@@ -89,9 +96,16 @@ report-round exclusions (see below) — not bulk geodata. Don't gitignore it.
 - `web/data/reported-cities.json` — Report Round blocklist. City ids only, no PII. Global
   across all games, persisted across restarts. Grows slowly; a flat file is intentional,
   not a placeholder for "add a real DB later."
+- `cloudflare/pmtiles-worker/` — the Protomaps serverless Worker (from
+  `github.com/protomaps/PMTiles/tree/main/serverless/cloudflare`) that serves minimap
+  tiles from R2 in production. `wrangler deploy` from that directory; `wrangler.toml`
+  has the R2 binding, custom domain route, and `ALLOWED_ORIGINS`.
 - `web/` — phase 3 Next.js app (16.x, App Router, Turbopack). `.env.local` needs
-  `NEXT_PUBLIC_MAPBOX_TOKEN` (already set), `TILES_PATH`, `CITIES_DB` (both already set,
-  point at `C:\geodata\...` and `etl/cities.sqlite`). Launch via the `web` config in
+  `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_TILES_URL` (the Worker's TileJSON endpoint),
+  `CITIES_DB`, `GAME_DB_PATH` (all already set locally). On Railway these are set as
+  service Variables — `NEXT_PUBLIC_*` ones must also be declared `ARG` in the
+  `Dockerfile`, or they end up empty in the built client bundle (Railway only exposes
+  Variables to `RUN` steps that explicitly ask for them). Launch via the `web` config in
   `.claude/launch.json` (preview tool), not a bare `npm run dev` — it needs the repo-root
   cwd context. After editing `next.config.ts` or anything under `lib/server/`, delete
   `web/.next` before restarting — Turbopack's dev cache goes stale across those changes
