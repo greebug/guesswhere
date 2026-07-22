@@ -42,12 +42,18 @@ export async function POST(
       .filter((c): c is string => !!c)
   );
 
-  const replacement = pickReplacementCity(
-    session.targetPopulation,
-    grader,
-    getReportedIds(),
-    otherCountries
-  );
+  let replacement;
+  try {
+    replacement = pickReplacementCity(
+      session.targetPopulation,
+      grader,
+      getReportedIds(),
+      otherCountries,
+      session.onlyCoast
+    );
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'failed to pick replacement' }, { status: 400 });
+  }
 
   round.cityId = replacement.id;
   round.lat = replacement.lat;

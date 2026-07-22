@@ -37,6 +37,7 @@ export interface CityRow {
   iso2: string | null;
   pop_ghsl: number;
   min_render_zoom: number;
+  dist_to_coast_km: number | null;
 }
 
 interface NameIndex {
@@ -61,7 +62,7 @@ function buildGrader(dbPath: string): Grader {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   const rows = db.prepare(`
     SELECT id, canonical_name, aliases_json, lat, lon, country, iso2,
-           pop_ghsl, min_render_zoom
+           pop_ghsl, min_render_zoom, dist_to_coast_km
     FROM cities WHERE quarantined = 0
   `).all() as unknown as CityRow[];
   db.close();

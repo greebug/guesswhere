@@ -12,14 +12,21 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(targetPopulation) || targetPopulation <= 0) {
     return NextResponse.json({ error: 'targetPopulation must be a positive number' }, { status: 400 });
   }
+  const onlyCoast = body?.onlyCoast === true;
 
   const grader = getGrader();
-  const cities = selectRound(targetPopulation, grader, getReportedIds());
+  let cities;
+  try {
+    cities = selectRound(targetPopulation, grader, getReportedIds(), onlyCoast);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'failed to select round' }, { status: 400 });
+  }
   const rounds = createRoundStates(cities);
 
   const session = {
     id: newGameId(),
     targetPopulation,
+    onlyCoast,
     createdAt: Date.now(),
     rounds,
   };

@@ -8,6 +8,7 @@ const PRESETS = [50_000, 100_000, 500_000, 2_000_000];
 export default function Home() {
   const router = useRouter();
   const [population, setPopulation] = useState('100000');
+  const [onlyCoast, setOnlyCoast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +19,7 @@ export default function Home() {
       const res = await fetch('/api/game/new', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPopulation }),
+        body: JSON.stringify({ targetPopulation, onlyCoast }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'failed to start game');
       const data = await res.json();
@@ -37,7 +38,7 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col items-center gap-3">
-        <label className="text-sm text-zinc-400">Approximate population</label>
+        <label className="text-sm text-zinc-400">Population Threshold</label>
         <input
           type="number"
           min={1}
@@ -56,6 +57,15 @@ export default function Home() {
             </button>
           ))}
         </div>
+        <label className="mt-2 flex items-center gap-2 text-sm text-zinc-400">
+          <input
+            type="checkbox"
+            checked={onlyCoast}
+            onChange={(e) => setOnlyCoast(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-800"
+          />
+          Only Coast (within 20mi of a coastline)
+        </label>
       </div>
 
       <button

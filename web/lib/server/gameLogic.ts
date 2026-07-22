@@ -1,6 +1,10 @@
 import type { CityRow, Grader } from './grader';
 
 const ROUNDS_PER_GAME = 10;
+// "Only Coast" mode: 20mi, converted to km. Natural Earth's ocean coastline
+// only (etl/add-coastal-distance.js) -- lake shorelines (Great Lakes, etc.)
+// don't count, matching the plain-English sense of "coast".
+const COAST_THRESHOLD_KM = 20 * 1.609344;
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -65,16 +69,29 @@ function pickCitiesAtOrAbove(
   return picked;
 }
 
+function applyCoastFilter(pool: CityRow[], onlyCoast: boolean): CityRow[] {
+  if (!onlyCoast) return pool;
+  return pool.filter(
+    (c) => c.dist_to_coast_km !== null && c.dist_to_coast_km <= COAST_THRESHOLD_KM
+  );
+}
+
 export function selectRound(
   minPopulation: number,
   grader: Grader,
-  excludeIds: Set<number> = new Set()
+  excludeIds: Set<number> = new Set(),
+  onlyCoast: boolean = false
 ): CityRow[] {
-  const pool = grader.allCities().filter((c) => !excludeIds.has(c.id));
+  const pool = applyCoastFilter(
+    grader.allCities().filter((c) => !excludeIds.has(c.id)),
+    onlyCoast
+  );
   const picked = pickCitiesAtOrAbove(minPopulation, pool, ROUNDS_PER_GAME, new Set());
   if (picked.length < ROUNDS_PER_GAME) {
     throw new Error(
-      `only found ${picked.length} cities with population >= ${minPopulation} -- corpus may be too small at this floor`
+      `only found ${picked.length} cities with population >= ${minPopulation}` +
+        (onlyCoast ? ' within 20mi of a coast' : '') +
+        ' -- corpus may be too small at this floor'
     );
   }
   return picked;
@@ -85,13 +102,19 @@ export function pickReplacementCity(
   minPopulation: number,
   grader: Grader,
   excludeIds: Set<number>,
-  excludeCountries: Set<string>
+  excludeCountries: Set<string>,
+  onlyCoast: boolean = false
 ): CityRow {
-  const pool = grader.allCities().filter((c) => !excludeIds.has(c.id));
+  const pool = applyCoastFilter(
+    grader.allCities().filter((c) => !excludeIds.has(c.id)),
+    onlyCoast
+  );
   const [picked] = pickCitiesAtOrAbove(minPopulation, pool, 1, excludeCountries);
   if (!picked) {
     throw new Error(
-      `no replacement city available with population >= ${minPopulation} (excluding reported cities)`
+      `no replacement city available with population >= ${minPopulation}` +
+        (onlyCoast ? ' within 20mi of a coast' : '') +
+        ' (excluding reported cities)'
     );
   }
   return picked;
@@ -110,6 +133,7 @@ export interface RoundState {
 export interface GameSession {
   id: string;
   targetPopulation: number;
+  onlyCoast: boolean;
   createdAt: number;
   rounds: RoundState[];
 }
