@@ -21,7 +21,7 @@ export async function POST(
   // change scoring -- it just returns the name that's already displayed.
   if (!round.solved && !round.revealed) {
     round.revealed = true;
-    round.canonicalName = getGrader().reveal(round.cityId);
+    round.canonicalName = getGrader().revealWithCountry(round.cityId);
     saveGame(session);
   }
 

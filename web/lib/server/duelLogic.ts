@@ -170,11 +170,15 @@ export function tick(lobby: DuelLobby, grader: Grader): void {
  * cityId/canonical name, only settled ones (matches PLAN.md: answer never
  * reaches the client until a round is over). */
 export function buildPublicState(lobby: DuelLobby, grader: Grader) {
-  const nameFor = (cityId: number) => grader.getCityRow(cityId)?.canonical_name ?? null;
   const toLastRound = (index: number) => {
     const r = lobby.rounds[index];
     if (!r) return null;
-    return { index, solvedByPlayerId: r.solvedByPlayerId, timedOut: r.timedOut, canonicalName: nameFor(r.cityId) };
+    // Timed out (nobody solved it) gets the country appended, same as solo
+    // reveal -- a solved round doesn't, the winner already knew the country.
+    const canonicalName = r.timedOut
+      ? grader.revealWithCountry(r.cityId)
+      : (grader.getCityRow(r.cityId)?.canonical_name ?? null);
+    return { index, solvedByPlayerId: r.solvedByPlayerId, timedOut: r.timedOut, canonicalName };
   };
 
   // 'finished' is set by advanceRound() *without* incrementing
