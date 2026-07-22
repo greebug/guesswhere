@@ -1,5 +1,18 @@
-import type { StyleSpecification } from 'maplibre-gl';
+import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { layersWithPartialCustomTheme } from 'protomaps-themes-base';
+
+// Self-hosted vector tiles (PLAN.md core invariant: this IS the answer key --
+// see etl/). Served via the Protomaps Cloudflare Worker (cloudflare/pmtiles-worker/)
+// reading from R2 -- a real TileJSON endpoint, not a raw pmtiles:// byte-range
+// source, since the Worker decodes tiles server-side rather than handing back
+// the archive itself.
+export const TILES_SOURCE_ID = 'protomaps';
+export const HILLSHADE_SOURCE_ID = 'terrain';
+// AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
+// Stands in for phase 1's deferred dedicated elevation download.
+const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+
+const GLYPHS = 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
 
 // The stock 'light' theme is low-contrast almost everywhere land-cover is
 // concerned: forest, scrub, sand, and plain earth all land within a few RGB
@@ -27,20 +40,55 @@ export const MINIMAP_THEME_OVERRIDES = {
   industrial: '#c3c3c8',
   aerodrome: '#c9c9cf',
   military: '#d6d0c8',
+  // Darker than the theme default (#adadad) so country lines read clearly
+  // against the tan earth fill -- width is bumped separately below, since
+  // the Theme type only exposes color, not line-width.
+  boundaries: '#707070',
 };
 
-// Self-hosted vector tiles (PLAN.md core invariant: this IS the answer key --
-// see etl/). Served via the Protomaps Cloudflare Worker (cloudflare/pmtiles-worker/)
-// reading from R2 -- a real TileJSON endpoint, not a raw pmtiles:// byte-range
-// source, since the Worker decodes tiles server-side rather than handing back
-// the archive itself.
-export const TILES_SOURCE_ID = 'protomaps';
-export const HILLSHADE_SOURCE_ID = 'terrain';
-// AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
-// Stands in for phase 1's deferred dedicated elevation download.
-const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+// protomaps-themes-base has no concept of general "this is a built-up area"
+// shading between the two zoom bands that actually carry that data: the
+// tileset's own `landcover` layer (kind=urban_area) only exists up to z7,
+// and individual `buildings` footprints don't start until z11 -- so a city
+// viewed at typical minimap zoom fell into a dead zone with nothing to
+// distinguish it from scrubland (confirmed by fetching a real tile: the
+// `landuse` layer DOES carry kind='residential'/'commercial' polygons at
+// z10, the theme just never draws them). This fills that gap directly.
+const URBAN_FABRIC_LAYER: LayerSpecification = {
+  id: 'landuse_urban_fabric',
+  type: 'fill',
+  source: TILES_SOURCE_ID,
+  'source-layer': 'landuse',
+  filter: ['in', ['get', 'kind'], ['literal', ['residential', 'commercial', 'retail']]],
+  paint: {
+    'fill-color': '#d6d6d6',
+  },
+};
 
-const GLYPHS = 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
+/** Inserts a layer right before the first layer with the given id -- used to
+ * slot the urban-fabric fill in under the specific-purpose landuse layers
+ * (park, hospital, school...) so those still win visually if they overlap,
+ * while still drawing over the plain earth/landcover fill beneath. */
+function insertBefore(
+  layers: LayerSpecification[],
+  beforeId: string,
+  layer: LayerSpecification
+): LayerSpecification[] {
+  const index = layers.findIndex((l) => l.id === beforeId);
+  if (index === -1) return [...layers, layer];
+  return [...layers.slice(0, index), layer, ...layers.slice(index)];
+}
+
+/** Country-level boundary lines are the same 0.7px width for every theme --
+ * not something MINIMAP_THEME_OVERRIDES' color-only Theme type can reach --
+ * so it's bumped here directly on the generated layer. */
+function thickenCountryBorders(layers: LayerSpecification[]): LayerSpecification[] {
+  return layers.map((l) =>
+    l.id === 'boundaries_country'
+      ? ({ ...l, paint: { ...l.paint, 'line-width': 1.4 } } as LayerSpecification)
+      : l
+  );
+}
 
 /** Shared by the in-game minimap and the result page's world map, so the
  * theme above lives in exactly one place.
@@ -64,12 +112,20 @@ export function buildMinimapStyle(
     };
   }
 
+  const baseLayers = thickenCountryBorders(
+    insertBefore(
+      layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
+      'landuse_park',
+      URBAN_FABRIC_LAYER
+    )
+  );
+
   return {
     version: 8,
     glyphs: GLYPHS,
     sources,
     layers: [
-      ...layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
+      ...baseLayers,
       ...(withHillshade
         ? [
             {

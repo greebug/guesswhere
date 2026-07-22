@@ -12,6 +12,25 @@ import { buildMinimapStyle } from '@/lib/minimapStyle';
 const WORLD_CENTER: [number, number] = [10, 15]; // [lng, lat]
 const WORLD_ZOOM = 1.5;
 
+// Below this there's no meaningful "zoomed into a border" to label -- and it
+// keeps the lookup from ever firing at the default world view.
+const BORDER_LABEL_MIN_ZOOM = 4;
+// Sampled corner-to-corner (not left/right or top/bottom) so a border
+// running in roughly any direction still crosses between the two points --
+// a horizontal-only pair would miss an east-west border (e.g. much of the
+// France/Spain line), a vertical-only pair would miss a north-south one.
+// Fixed screen fractions (not stored pixel coordinates) so the label
+// positions stay correct across the collapsed/expanded resize for free,
+// without needing to recompute on every container resize.
+const BORDER_SAMPLE_POINTS = [
+  { x: 0.25, y: 0.25 },
+  { x: 0.75, y: 0.75 },
+] as const;
+
+function roundedCoordKey(lat: number, lon: number): string {
+  return `${lat.toFixed(2)},${lon.toFixed(2)}`;
+}
+
 type Layer = 'map' | 'elevation';
 
 interface MiniMapProps {
@@ -27,6 +46,11 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
   const expanded = hovering || pinned;
+  // Names of the countries on each side of a border currently crossing the
+  // view, or null when no border is on screen (or both sample points landed
+  // in the same country). Positions are fixed screen fractions, not stored
+  // here -- see BORDER_SAMPLE_FRACTIONS.
+  const [borderLabels, setBorderLabels] = useState<{ a: string; b: string } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -55,7 +79,55 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(containerRef.current);
 
+    // Country labels for whichever border the two sample points straddle.
+    // Only fires on moveend (not every drag frame) once zoomed in past
+    // BORDER_LABEL_MIN_ZOOM; a small in-memory cache then skips the network
+    // call entirely for the common case of nudging the map slightly and
+    // landing on the same two countries. (Gating on an actual rendered
+    // 'boundaries_country' feature would be more precise, but
+    // queryRenderedFeatures reads from the WebGL render tree, which is only
+    // populated after a real paint -- unverifiable here, and a real user's
+    // two country lookups differing is just as reliable a signal.)
+    const countryCache = new Map<string, string | null>();
+    let requestSeq = 0;
+    const updateBorderLabels = async () => {
+      const container = containerRef.current;
+      if (!container) return;
+      if (map.getZoom() < BORDER_LABEL_MIN_ZOOM) {
+        setBorderLabels(null);
+        return;
+      }
+
+      const { width, height } = container.getBoundingClientRect();
+      const lonLats = BORDER_SAMPLE_POINTS.map((p) => map.unproject([width * p.x, height * p.y]));
+      const keys = lonLats.map((ll) => roundedCoordKey(ll.lat, ll.lng));
+
+      const seq = ++requestSeq;
+      let names: (string | null)[];
+      if (keys.every((k) => countryCache.has(k))) {
+        names = keys.map((k) => countryCache.get(k) ?? null);
+      } else {
+        try {
+          const qs = lonLats.map((ll) => `point=${ll.lat.toFixed(3)},${ll.lng.toFixed(3)}`).join('&');
+          const res = await fetch(`/api/geo/country?${qs}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          names = data.countries as (string | null)[];
+          keys.forEach((k, i) => countryCache.set(k, names[i]));
+        } catch {
+          return; // transient network blip -- the next moveend tries again
+        }
+      }
+      if (seq !== requestSeq) return; // a newer move already superseded this one
+
+      setBorderLabels(
+        names[0] && names[1] && names[0] !== names[1] ? { a: names[0], b: names[1] } : null
+      );
+    };
+    map.on('moveend', updateBorderLabels);
+
     return () => {
+      map.off('moveend', updateBorderLabels);
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
@@ -63,9 +135,12 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // New round: back to the same neutral world view, not the answer.
+  // New round: back to the same neutral world view, not the answer. Clear
+  // border labels immediately rather than waiting for the async moveend
+  // re-check to catch up.
   useEffect(() => {
     mapRef.current?.jumpTo({ center: WORLD_CENTER, zoom: WORLD_ZOOM });
+    setBorderLabels(null);
   }, [roundKey]);
 
   useEffect(() => {
@@ -121,6 +196,22 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
         }`}
       >
         <div ref={containerRef} className="h-full w-full" />
+        {borderLabels && (
+          <>
+            <div
+              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-zinc-800 shadow"
+              style={{ left: `${BORDER_SAMPLE_POINTS[0].x * 100}%`, top: `${BORDER_SAMPLE_POINTS[0].y * 100}%` }}
+            >
+              {borderLabels.a}
+            </div>
+            <div
+              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-zinc-800 shadow"
+              style={{ left: `${BORDER_SAMPLE_POINTS[1].x * 100}%`, top: `${BORDER_SAMPLE_POINTS[1].y * 100}%` }}
+            >
+              {borderLabels.b}
+            </div>
+          </>
+        )}
         <div className="absolute top-1 left-1 z-10 flex gap-1 text-xs">
           {(['map', 'elevation'] as const).map((l) => (
             <button
