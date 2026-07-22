@@ -128,6 +128,9 @@ export default {
       });
     }
 
+    // Only 2xx responses go through the edge cache -- caching a 404/error
+    // (e.g. hit before the R2 object existed, or during a transient hiccup)
+    // used to stick for a full day (Cache-Control below), masking real fixes.
     const cacheableResponse = (
       body: ArrayBuffer | string | undefined,
       cacheableHeaders: Headers,
@@ -138,12 +141,13 @@ export default {
         env.CACHE_CONTROL || "public, max-age=86400"
       );
 
-      const cacheable = new Response(body, {
-        headers: cacheableHeaders,
-        status: status,
-      });
-
-      ctx.waitUntil(cache.put(request.url, cacheable));
+      if (status >= 200 && status < 300) {
+        const cacheable = new Response(body, {
+          headers: cacheableHeaders,
+          status: status,
+        });
+        ctx.waitUntil(cache.put(request.url, cacheable));
+      }
 
       const respHeaders = new Headers(cacheableHeaders);
       if (allowedOrigin)
