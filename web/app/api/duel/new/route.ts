@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { createLobby, buildPublicState, generateJoinCode, type DuelSettings } from '@/lib/server/duelLogic';
 import { saveLobby, getLobbyByJoinCode } from '@/lib/server/duelStore';
+import { getCurrentUser } from '@/lib/server/auth';
 
 export const runtime = 'nodejs';
 
@@ -31,7 +32,16 @@ function parseSettings(body: unknown): DuelSettings | { error: string } {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
-  const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
+
+  // A signed-in host duels under their account name, and the client-supplied
+  // one is ignored outright -- otherwise anyone could pick a name that isn't
+  // theirs. Guests still type whatever they want.
+  const user = await getCurrentUser();
+  const name = user
+    ? user.username
+    : typeof body?.name === 'string'
+      ? body.name.trim().slice(0, 40)
+      : '';
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
   const settings = parseSettings(body);
@@ -44,7 +54,7 @@ export async function POST(request: NextRequest) {
     joinCode = generateJoinCode();
   }
 
-  const lobby = createLobby(name, settings, joinCode);
+  const lobby = createLobby(name, settings, joinCode, user?.id ?? null);
   saveLobby(lobby);
 
   return NextResponse.json({

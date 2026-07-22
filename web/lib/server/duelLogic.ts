@@ -9,6 +9,10 @@ export interface Player {
   name: string;
   roundWins: number;
   joinedAt: number;
+  /** Set when the player was signed in as they joined -- their name then comes
+   * from the account rather than a text box, so it can't be spoofed. Null for
+   * guests, who still type whatever they like. */
+  userId?: string | null;
 }
 
 export interface DuelRound {
@@ -69,8 +73,19 @@ export function generateJoinCode(): string {
   return code;
 }
 
-export function createLobby(hostName: string, settings: DuelSettings, joinCode: string): DuelLobby {
-  const host: Player = { id: newPlayerId(), name: hostName, roundWins: 0, joinedAt: Date.now() };
+export function createLobby(
+  hostName: string,
+  settings: DuelSettings,
+  joinCode: string,
+  userId: string | null = null
+): DuelLobby {
+  const host: Player = {
+    id: newPlayerId(),
+    name: hostName,
+    roundWins: 0,
+    joinedAt: Date.now(),
+    userId,
+  };
   return {
     id: newLobbyId(),
     joinCode,
@@ -88,8 +103,8 @@ export function createLobby(hostName: string, settings: DuelSettings, joinCode: 
   };
 }
 
-export function addPlayer(lobby: DuelLobby, name: string): Player {
-  const player: Player = { id: newPlayerId(), name, roundWins: 0, joinedAt: Date.now() };
+export function addPlayer(lobby: DuelLobby, name: string, userId: string | null = null): Player {
+  const player: Player = { id: newPlayerId(), name, roundWins: 0, joinedAt: Date.now(), userId };
   lobby.players.push(player);
   return player;
 }

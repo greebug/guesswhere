@@ -3,11 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-
-const PRESETS = [50_000, 100_000, 500_000, 2_000_000];
+import AuthMenu from '@/components/AuthMenu';
+import Leaderboard from '@/components/Leaderboard';
+import { formatThousands, parseDigits } from '@/lib/format';
+import { BOARD_POPULATIONS } from '@/lib/boards';
 
 export default function Home() {
   const router = useRouter();
+  // Raw digits in state, separators only on the way to the input -- see
+  // lib/format.ts for why this can't be an <input type="number">.
   const [population, setPopulation] = useState('100000');
   const [onlyCoast, setOnlyCoast] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,23 +36,29 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-zinc-900 px-4 text-white">
+    <div className="flex min-h-screen flex-col items-center gap-8 bg-zinc-900 px-4 py-10 text-white">
+      <div className="flex w-full max-w-xl justify-end">
+        <AuthMenu />
+      </div>
+
       <div className="text-center">
         <h1 className="text-4xl font-bold">Guesswhere</h1>
-        <p className="mt-2 text-zinc-400">Pick a city size, then find 10 places from satellite imagery alone.</p>
+        <p className="mt-2 text-zinc-400">
+          Pick a city size, then find 10 places from satellite imagery alone.
+        </p>
       </div>
 
       <div className="flex flex-col items-center gap-3">
         <label className="text-sm text-zinc-400">Population Threshold</label>
         <input
-          type="number"
-          min={1}
-          value={population}
-          onChange={(e) => setPopulation(e.target.value)}
+          type="text"
+          inputMode="numeric"
+          value={formatThousands(population)}
+          onChange={(e) => setPopulation(parseDigits(e.target.value))}
           className="w-48 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg"
         />
         <div className="flex gap-2">
-          {PRESETS.map((p) => (
+          {BOARD_POPULATIONS.map((p) => (
             <button
               key={p}
               onClick={() => setPopulation(String(p))}
@@ -87,6 +97,8 @@ export default function Home() {
           Join a Duel &rarr;
         </Link>
       </div>
+
+      <Leaderboard />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { getGrader } from '@/lib/server/grader';
 import { selectRound, createRoundStates } from '@/lib/server/gameLogic';
 import { saveGame, newGameId } from '@/lib/server/gameStore';
 import { getReportedIds } from '@/lib/server/reportedCities';
+import { getCurrentUser } from '@/lib/server/auth';
+import { pruneIfDue } from '@/lib/server/gameDb';
 
 export const runtime = 'nodejs';
 
@@ -23,14 +25,32 @@ export async function POST(request: NextRequest) {
   }
   const rounds = createRoundStates(cities);
 
+  // Ownership is fixed at creation. Signing in mid-game doesn't retroactively
+  // claim a run that was started anonymously.
+  const user = await getCurrentUser();
+  const now = Date.now();
+
   const session = {
     id: newGameId(),
     targetPopulation,
     onlyCoast,
-    createdAt: Date.now(),
+    createdAt: now,
     rounds,
+    userId: user?.id ?? null,
+    // The clock starts on round 0 immediately -- the player is already looking
+    // at it by the time this response lands.
+    activeRoundIndex: 0,
+    activeSince: now,
+    usedReveal: false,
+    usedReport: false,
+    isClone: false,
+    finishedAt: null,
   };
   saveGame(session);
+
+  // Cheap no-op unless a day has passed; keeps the volume from creeping back
+  // up without needing a separate cron process.
+  pruneIfDue();
 
   // Never send canonical_name/aliases to the client -- only what's needed to
   // render imagery and track progress (PLAN.md: answer never reaches client).

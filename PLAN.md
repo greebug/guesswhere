@@ -300,9 +300,35 @@ Next.js + React + TypeScript, Mapbox GL JS.
 - Minimap bottom right: pan/zoom, layer toggle (map / elevation)
 - Mapbox logo + attribution visible — **ToS requirement, do not remove**
 
-### Phase 4 — Accounts + leaderboards → **Sonnet** (Opus for anti-cheat review)
+### Phase 4 — Accounts + leaderboards — BUILT (2026-07-22)
 
-Server-authoritative timing. Per-tier speed leaderboards. Revealed rounds don't score.
+The one-line spec below ("server-authoritative timing, per-tier speed leaderboards,
+revealed rounds don't score") all shipped. Details and rationale live in `CLAUDE.md`'s
+status section; the decisions worth recording here are the ones where the answer wasn't
+obvious from the spec:
+
+- **"How long you spent on a round" is accumulated ACTIVE time**, not first-arrival →
+  solve. The literal reading was the original ask, but because you can paginate freely
+  between the 10 slides, it double-counts: Toronto's clock would keep running while
+  you're looking at Jakarta, and the round times would sum to far more than the game
+  actually took. Active time means exactly one round accrues at a time, so the
+  breakdown and the leaderboard number can never disagree. Confirmed with the user
+  before building.
+- **Only the four preset tiers have boards**, matched exactly rather than bucketed.
+  Population is a *minimum*, so a higher tier = bigger, more recognizable cities = an
+  easier game; folding a custom 137k run into the 100k board would let anyone hand-pick
+  an easier setting and rank against people who played the real one.
+- **Cloned ("Share Cities") sets never rank.** Found while wiring clone ownership: a
+  clone is by construction a set someone has already played, so without this you could
+  finish a game, clone it, and speedrun the memorized answers to the top of every board.
+  The cost — a friend seeing the set fresh can't rank either — is accepted, because the
+  server genuinely cannot distinguish the two cases.
+- **Email is optional, and reset requires a *verified* address.** Optional so a mail
+  problem never gates play; verification-required so signing up with someone else's
+  address isn't an account-takeover path.
+- Accounts/leaderboards persist because `GAME_DB_PATH` sits on the Railway volume. The
+  prune sweep added alongside them is safe for leaderboards **by construction**, since
+  `game_results` are self-contained snapshots rather than references into `games`.
 
 ### Phase 5 — Multiplayer → **Opus** design, **Sonnet** build
 

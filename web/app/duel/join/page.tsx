@@ -2,16 +2,23 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useCurrentUser } from '@/lib/useCurrentUser';
 
 export default function JoinDuel() {
   const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Signed in: the server takes the name from the account and ignores
+  // anything posted, so there's nothing to type.
+  const needsName = !userLoading && !user;
+
   async function submit() {
-    if (!code.trim() || !name.trim()) return;
+    if (!code.trim() || (needsName && !name.trim())) return;
     setLoading(true);
     setError(null);
     try {
@@ -48,26 +55,42 @@ export default function JoinDuel() {
         />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-center text-sm text-zinc-400">Your name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          maxLength={40}
-          placeholder="Bob"
-          className="w-64 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg"
-        />
-      </div>
+      {user ? (
+        <p className="text-sm text-zinc-400">
+          Playing as <span className="font-semibold text-white">{user.username}</span>
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <label className="text-center text-sm text-zinc-400">Your name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+            maxLength={40}
+            placeholder="Bob"
+            className="w-64 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg"
+          />
+        </div>
+      )}
 
       <button
         onClick={submit}
-        disabled={loading || !code.trim() || !name.trim()}
+        disabled={loading || userLoading || !code.trim() || (needsName && !name.trim())}
         className="rounded-full bg-white px-8 py-3 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
       >
-        {loading ? 'Joining...' : 'Ready'}
+        {loading ? 'Joining...' : user ? 'Ready' : 'Play as Guest'}
       </button>
+
+      {!user && !userLoading && (
+        <p className="text-sm text-zinc-500">
+          or{' '}
+          <Link href="/" className="underline hover:text-zinc-300">
+            sign in
+          </Link>{' '}
+          to use your account name
+        </p>
+      )}
 
       {error && <p className="text-red-400">{error}</p>}
     </div>

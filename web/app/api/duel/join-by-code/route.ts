@@ -2,13 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { getLobbyByJoinCode, saveLobby } from '@/lib/server/duelStore';
 import { addPlayer, buildPublicState, tick } from '@/lib/server/duelLogic';
+import { getCurrentUser } from '@/lib/server/auth';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const code = typeof body?.code === 'string' ? body.code.trim().toUpperCase() : '';
-  const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
+
+  // Signed in? Your account name is used and the posted one is ignored.
+  const user = await getCurrentUser();
+  const name = user
+    ? user.username
+    : typeof body?.name === 'string'
+      ? body.name.trim().slice(0, 40)
+      : '';
   if (!code) return NextResponse.json({ error: 'code is required' }, { status: 400 });
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
@@ -21,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'this game has already started' }, { status: 400 });
   }
 
-  const player = addPlayer(lobby, name);
+  const player = addPlayer(lobby, name, user?.id ?? null);
   saveLobby(lobby);
 
   return NextResponse.json({ lobbyId: lobby.id, playerId: player.id, state: buildPublicState(lobby, grader) });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { getGame, saveGame } from '@/lib/server/gameStore';
-import { correctCount } from '@/lib/server/gameLogic';
+import { accrue, correctCount, finalizeIfComplete, isComplete } from '@/lib/server/gameLogic';
 
 export const runtime = 'nodejs';
 
@@ -28,19 +28,28 @@ export async function POST(
       correct: round.solved,
       canonicalName: round.canonicalName,
       correctCount: correctCount(session),
+      complete: isComplete(session),
     });
   }
 
-  const result = getGrader().grade(round.cityId, guess);
+  // Bank the time BEFORE grading, so a correct guess stops this round's clock
+  // at the instant it was submitted rather than at the next heartbeat.
+  accrue(session);
+
+  const grader = getGrader();
+  const result = grader.grade(round.cityId, guess);
   if (result.correct) {
     round.solved = true;
     round.canonicalName = result.canonicalName;
-    saveGame(session);
   }
+  // A wrong guess still moved the clock, so this saves either way.
+  finalizeIfComplete(session, grader);
+  saveGame(session);
 
   return NextResponse.json({
     correct: result.correct,
     canonicalName: result.correct ? result.canonicalName : null,
     correctCount: correctCount(session),
+    complete: isComplete(session),
   });
 }

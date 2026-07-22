@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { formatDuration } from '@/lib/boards';
 
 interface GameHeaderProps {
   gameId: string;
@@ -13,6 +14,9 @@ interface GameHeaderProps {
   correctCount: number;
   totalRounds: number;
   currentSlide: number; // 1-indexed, for display
+  /** Total active time so far. Shown live so being timed is visible during
+   * the game rather than a surprise on the end-of-game report. */
+  elapsedMs: number;
 }
 
 // The original two buttons (recenter, reveal) plus Report Round, added at the
@@ -28,6 +32,7 @@ export default function GameHeader({
   correctCount,
   totalRounds,
   currentSlide,
+  elapsedMs,
 }: GameHeaderProps) {
   const [copyState, setCopyState] = useState<'idle' | 'working' | 'copied'>('idle');
 
@@ -51,20 +56,10 @@ export default function GameHeader({
 
   return (
     <div className="flex items-center justify-between bg-black/80 px-3 py-2 text-white">
-      <Link href="/" className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
-        New Game
-      </Link>
-
-      <div className="flex gap-4 text-sm tabular-nums">
-        <span title="Correct out of 10">
-          {correctCount}/{totalRounds} correct
-        </span>
-        <span title="Current slide">
-          {currentSlide}/{totalRounds}
-        </span>
-      </div>
-
       <div className="flex gap-2">
+        <Link href="/" className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
+          New Game
+        </Link>
         <button
           onClick={shareCities}
           disabled={copyState === 'working'}
@@ -73,6 +68,21 @@ export default function GameHeader({
         >
           {copyState === 'copied' ? 'Copied!' : 'Share Cities'}
         </button>
+      </div>
+
+      <div className="flex gap-4 text-sm tabular-nums">
+        <span title="Correct out of 10">
+          {correctCount}/{totalRounds} correct
+        </span>
+        <span title="Current slide">
+          {currentSlide}/{totalRounds}
+        </span>
+        <span title="Total time" className="font-medium">
+          {formatDuration(elapsedMs)}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
         <button onClick={onRecenter} className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
           Recenter
         </button>

@@ -45,21 +45,72 @@ in-memory `Map`.
   than WebSockets (Railway's persistent process makes WS *possible*, but polling
   needed zero infra changes and is plenty responsive at this game's pace).
 
-**Next up (not started): phase 4, leaderboards** — fastest time at a given
-population/coast setting (e.g. "50k, only-coast"). Two open questions to resolve with
-the user before writing code, not just implementation details:
-1. Solo mode has **no elapsed-time tracking at all** today — only duels do (the
-   per-round timer). "Fastest time" needs deciding: duels-only, or does solo need a
-   timer added too?
-2. A real leaderboard needs **some persistent identity** to attribute a score to
-   across sessions/devices. There are currently zero accounts anywhere in the app —
-   duels' `playerId` is a throwaway per-lobby `localStorage` value, nothing persists
-   across a new lobby or a cleared browser. Doesn't have to be full auth for a first
-   cut (even a plain persisted name could work), but it needs deciding, not assuming.
+**Phase 4 (accounts, timing, leaderboards): done.** Both of its old open questions are
+settled and built.
+
+- **Accounts** — username + password, `lib/server/auth.ts`. scrypt via `node:crypto`
+  (no native module, so nothing extra in the Dockerfile), httpOnly `gw_session` cookie
+  with only `sha256(token)` in the DB. Email is **optional**; a *verified* email is what
+  unlocks password reset, so a mail problem can never block someone from playing.
+  Mail goes out via **Resend's REST API** (`lib/server/email.ts`) — plain `fetch`, no npm
+  dependency. Needs `RESEND_API_KEY` and `APP_URL`; without them every email feature hides
+  itself rather than throwing, which is why local dev works untouched.
+  **The entire provider dependency is the `send()` function** — swapping providers means
+  changing an endpoint, an auth header, and a body shape, and nothing else. Cloudflare
+  Email Sending was built first and then replaced: it requires the $5/mo Workers Paid
+  plan, which isn't worth it for a feature used a few times a year.
+- **Timing is "active time per slide"** (`accrue`/`setActiveRound` in `gameLogic.ts`): a
+  round accrues only while it is BOTH the displayed slide and unsettled. That's what makes
+  the ten round times sum *exactly* to the game total, and it means revisiting a solved
+  round is free. `POST /api/game/[id]/focus` is both the pagination signal and a 10s
+  heartbeat; `MAX_ACCRUAL_STEP_MS` (30s) caps a single step so a closed or backgrounded
+  tab can't charge a round for hours.
+- **Leaderboards** — only the four preset tiers have boards (50k/100k/500k/2M × regular
+  and coast-only, top 5 each, on the home page). Exact match, never bucketing: population
+  is a *minimum*, so a higher tier means bigger, easier cities, and rounding a custom
+  137k game into the 100k board would be trivially gameable.
+- **Ineligible for ranking**: not signed in, any reveal, any reported round, or a
+  **cloned ("Share Cities") set** — a clone is by definition cities someone already
+  played, so without that rule you could finish a game, clone it, and speedrun the
+  answers you just memorized straight to the top.
+- `game_results` rows are **self-contained snapshots**, deliberately not references into
+  `games`. That's what lets the prune sweep drop old sessions without taking leaderboard
+  entries, result pages, or profile history with them. Verified, not assumed.
+- **Prune sweep** (`gameDb.ts`): lobbies >24h, games >30d, expired sessions/tokens, then
+  `VACUUM` — deleting rows alone leaves the file at its high-water mark. Runs on first
+  connection and daily thereafter via `pruneIfDue()`. **Consequence: "Share Cities" links
+  expire after 30 days.**
 
 **Known, deliberately out of scope for now (not forgotten, just not asked for yet):**
 no Report Round or Reveal in duels; no reconnection/host-migration if a duel player
-loses their `localStorage` mid-match (they'd rejoin as a new player).
+loses their `localStorage` mid-match (they'd rejoin as a new player). Duels don't feed
+the leaderboard — different game shape; accounts only changed where a duel gets its
+*name* from (signed in → account name, and the client-supplied one is ignored server-side,
+which closes name-spoofing as a side effect).
+
+**Deploy prerequisites for phase 4 on Railway** — the volume (`guesswhere-volume`, `/data`,
+5GB) already holds `GAME_DB_PATH`, so accounts/results persist across deploys with no
+change. Email additionally needs, one time:
+
+1. **Add `bingbongblitz.com` as a domain in Resend**, then paste the SPF/DKIM records it
+   gives you into Cloudflare DNS (the zone is already there). Propagates in ~5-15 min.
+2. **Create a Resend API key** (`re_...`).
+3. `RESEND_API_KEY` as a Railway service Variable. Server-side only — **no `ARG` in the
+   Dockerfile**, unlike the `NEXT_PUBLIC_*` ones.
+
+`APP_URL` (the origin emailed links are built from, `lib/appUrl.ts`) does **not** need
+setting on Railway: it falls back to Railway's own `RAILWAY_PUBLIC_DOMAIN`, so links
+follow the domain automatically. Set `APP_URL` explicitly only for a custom domain, since
+`RAILWAY_PUBLIC_DOMAIN` is read-only and always the `*.up.railway.app` one. It lives in
+its own import-free module purely so it's unit-testable — `lib/server/email.ts` pulls in
+`node:sqlite` and `next/headers` transitively and can't be loaded outside Next.
+
+Until these are set, accounts work fine and every email feature hides itself
+(`isEmailConfigured()`), which is exactly how local dev runs.
+
+**Do NOT reach for `wrangler email ...` for any of this** — that was the original
+Cloudflare-based plan, and the command doesn't exist in the pinned wrangler (4.59.1;
+checked, it isn't in `wrangler --help` at all). Cloudflare is no longer the mail path.
 
 **Two real bugs found and fixed after initial ship — worth knowing about if touching
 these areas again:**

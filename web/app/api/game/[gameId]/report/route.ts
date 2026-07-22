@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { getGame, saveGame } from '@/lib/server/gameStore';
-import { pickReplacementCity } from '@/lib/server/gameLogic';
+import { accrue, pickReplacementCity } from '@/lib/server/gameLogic';
 import { getReportedIds, addReportedId } from '@/lib/server/reportedCities';
 
 export const runtime = 'nodejs';
@@ -55,6 +55,11 @@ export async function POST(
     return NextResponse.json({ error: e instanceof Error ? e.message : 'failed to pick replacement' }, { status: 400 });
   }
 
+  // Bank whatever was spent staring at the unusable imagery, then zero it:
+  // the slot now holds a different city, and time lost to a bad round isn't
+  // time spent on the replacement.
+  accrue(session);
+
   round.cityId = replacement.id;
   round.lat = replacement.lat;
   round.lon = replacement.lon;
@@ -62,6 +67,10 @@ export async function POST(
   round.solved = false;
   round.revealed = false;
   round.canonicalName = null;
+  round.elapsedMs = 0;
+  // Sticky, like usedReveal -- reporting ends leaderboard contention for this
+  // game, so a fresh city can't be farmed for an easier time.
+  session.usedReport = true;
   saveGame(session);
 
   return NextResponse.json({

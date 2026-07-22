@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import MainMap, { type MainMapHandle } from '@/components/MainMap';
 import MiniMap from '@/components/MiniMap';
 import GameHeader from '@/components/GameHeader';
 import AnswerBox from '@/components/AnswerBox';
+import GameReport, { type GameSummary } from '@/components/GameReport';
 
 interface RoundView {
   index: number;
@@ -20,15 +21,38 @@ interface GameView {
   gameId: string;
   targetPopulation: number;
   correctCount: number;
+  elapsedMs: number;
+  complete: boolean;
   rounds: RoundView[];
 }
+
+// Beats often enough that the server's 30s single-step cap never binds during
+// real play, but rarely enough to be invisible on the network tab. See
+// MAX_ACCRUAL_STEP_MS in lib/server/gameLogic.ts.
+const HEARTBEAT_MS = 10_000;
 
 export default function PlayClient({ gameId }: { gameId: string }) {
   const [game, setGame] = useState<GameView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reportPending, setReportPending] = useState(false);
+  const [summary, setSummary] = useState<GameSummary | null>(null);
+  const [summaryDismissed, setSummaryDismissed] = useState(false);
+  // Total banked on the server, plus a local ticker so the header clock moves
+  // between heartbeats rather than jumping every 10 seconds.
+  const [bankedMs, setBankedMs] = useState(0);
+  const [tickBase, setTickBase] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const mainMapRef = useRef<MainMapHandle>(null);
+
+  // Declared before the mount effect below, which calls it -- it resolves at
+  // runtime either way (the .then runs after the component body finishes) but
+  // relying on that is a temporal-dead-zone trap waiting to bite.
+  const loadSummary = useCallback(async () => {
+    const res = await fetch(`/api/game/${gameId}/summary`);
+    if (!res.ok) return;
+    setSummary(await res.json());
+  }, [gameId]);
 
   useEffect(() => {
     fetch(`/api/game/${gameId}`)
@@ -36,9 +60,58 @@ export default function PlayClient({ gameId }: { gameId: string }) {
         if (!res.ok) throw new Error((await res.json()).error ?? 'game not found');
         return res.json();
       })
-      .then(setGame)
+      .then((g: GameView) => {
+        setGame(g);
+        setBankedMs(g.elapsedMs);
+        setTickBase(Date.now());
+        // Resuming a game that's already over: go straight to the report.
+        if (g.complete) loadSummary();
+        else {
+          // Start on the first unsettled round rather than always round 0 --
+          // reloading mid-game shouldn't drop you back at the beginning.
+          const next = g.rounds.findIndex((r) => !r.solved && !r.revealed);
+          if (next > 0) setCurrentIndex(next);
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'failed to load game'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
+
+  // Tell the server which slide is on screen. Doubles as the heartbeat: the
+  // same call with an unchanged index just banks the interval so far.
+  const focus = useCallback(
+    async (roundIndex: number) => {
+      try {
+        const res = await fetch(`/api/game/${gameId}/focus`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roundIndex }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setBankedMs(data.elapsedMs);
+        setTickBase(Date.now());
+      } catch {
+        // A dropped heartbeat is self-correcting -- the next one banks the
+        // interval, bounded by the server's per-step cap.
+      }
+    },
+    [gameId]
+  );
+
+  useEffect(() => {
+    if (!game || game.complete || summary) return;
+    focus(currentIndex);
+    const interval = setInterval(() => focus(currentIndex), HEARTBEAT_MS);
+    return () => clearInterval(interval);
+  }, [game, currentIndex, focus, summary]);
+
+  // Local ticker for the header clock only; the server remains the authority.
+  useEffect(() => {
+    if (summary) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [summary]);
 
   async function handleGuess(guess: string) {
     const res = await fetch(`/api/game/${gameId}/guess`, {
@@ -54,8 +127,9 @@ export default function PlayClient({ gameId }: { gameId: string }) {
           ? { ...r, solved: data.correct || r.solved, canonicalName: data.canonicalName ?? r.canonicalName }
           : r
       );
-      return { ...g, rounds, correctCount: data.correctCount };
+      return { ...g, rounds, correctCount: data.correctCount, complete: data.complete };
     });
+    if (data.complete) loadSummary();
     return { correct: data.correct as boolean, canonicalName: data.canonicalName as string | null };
   }
 
@@ -71,8 +145,9 @@ export default function PlayClient({ gameId }: { gameId: string }) {
       const rounds = g.rounds.map((r) =>
         r.index === currentIndex ? { ...r, revealed: true, canonicalName: data.canonicalName } : r
       );
-      return { ...g, rounds };
+      return { ...g, rounds, complete: data.complete };
     });
+    if (data.complete) loadSummary();
   }
 
   async function handleReport() {
@@ -112,6 +187,11 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   }
 
   const round = game.rounds[currentIndex];
+  const finished = Boolean(summary);
+  // Only an unsettled round is still accruing, so a solved one's clock stops
+  // moving on screen exactly as it does on the server.
+  const liveMs =
+    finished || round.solved || round.revealed ? bankedMs : bankedMs + (now - tickBase);
 
   return (
     <div className="flex h-screen flex-col bg-black">
@@ -125,6 +205,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
         correctCount={game.correctCount}
         totalRounds={game.rounds.length}
         currentSlide={currentIndex + 1}
+        elapsedMs={liveMs}
       />
 
       <div className="relative flex-1">
@@ -145,6 +226,10 @@ export default function PlayClient({ gameId }: { gameId: string }) {
             canNext={currentIndex < game.rounds.length - 1}
           />
         </div>
+
+        {summary && !summaryDismissed && (
+          <GameReport summary={summary} onClose={() => setSummaryDismissed(true)} />
+        )}
       </div>
     </div>
   );
