@@ -79,9 +79,14 @@ export default function Home() {
 
       {error && <p className="text-red-400">{error}</p>}
 
-      <Link href="/duel/new" className="text-sm text-zinc-400 underline hover:text-zinc-200">
-        Play a Duel with friends &rarr;
-      </Link>
+      <div className="flex gap-4 text-sm text-zinc-400">
+        <Link href="/duel/new" className="underline hover:text-zinc-200">
+          Create a Duel &rarr;
+        </Link>
+        <Link href="/duel/join" className="underline hover:text-zinc-200">
+          Join a Duel &rarr;
+        </Link>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
-import { createLobby, buildPublicState, type DuelSettings } from '@/lib/server/duelLogic';
-import { saveLobby } from '@/lib/server/duelStore';
+import { createLobby, buildPublicState, generateJoinCode, type DuelSettings } from '@/lib/server/duelLogic';
+import { saveLobby, getLobbyByJoinCode } from '@/lib/server/duelStore';
 
 export const runtime = 'nodejs';
 
@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
   const settings = parseSettings(body);
   if ('error' in settings) return NextResponse.json({ error: settings.error }, { status: 400 });
 
-  const lobby = createLobby(name, settings);
+  // Astronomically unlikely to collide (31^4 =~ 924k codes) but check anyway
+  // rather than assume.
+  let joinCode = generateJoinCode();
+  for (let attempts = 0; getLobbyByJoinCode(joinCode) && attempts < 10; attempts++) {
+    joinCode = generateJoinCode();
+  }
+
+  const lobby = createLobby(name, settings, joinCode);
   saveLobby(lobby);
 
   return NextResponse.json({

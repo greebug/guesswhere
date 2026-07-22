@@ -31,6 +31,7 @@ export type DuelStatus = 'lobby' | 'countdown' | 'playing' | 'finished';
 
 export interface DuelLobby {
   id: string;
+  joinCode: string;
   hostPlayerId: string;
   players: Player[];
   settings: DuelSettings;
@@ -55,10 +56,24 @@ export function newPlayerId(): string {
   return randomUUID();
 }
 
-export function createLobby(hostName: string, settings: DuelSettings): DuelLobby {
+// No 0/O, 1/I/L -- avoids ambiguity when a code is read aloud or typed from
+// memory. 31 symbols ^ 4 chars =~ 924k combinations, plenty for a
+// friends-only prototype with no code reuse/expiry.
+const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+export function generateJoinCode(): string {
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += JOIN_CODE_ALPHABET[Math.floor(Math.random() * JOIN_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+export function createLobby(hostName: string, settings: DuelSettings, joinCode: string): DuelLobby {
   const host: Player = { id: newPlayerId(), name: hostName, roundWins: 0, joinedAt: Date.now() };
   return {
     id: newLobbyId(),
+    joinCode,
     hostPlayerId: host.id,
     players: [host],
     settings,
@@ -171,6 +186,7 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
 
   return {
     lobbyId: lobby.id,
+    joinCode: lobby.joinCode,
     hostPlayerId: lobby.hostPlayerId,
     status: lobby.status,
     players: lobby.players.map((p) => ({ id: p.id, name: p.name, roundWins: p.roundWins })),

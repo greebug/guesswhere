@@ -37,6 +37,7 @@ interface LastRound {
 
 interface DuelState {
   lobbyId: string;
+  joinCode: string;
   hostPlayerId: string;
   status: 'lobby' | 'countdown' | 'playing' | 'finished';
   players: DuelPlayer[];
@@ -321,7 +322,7 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
         disabled={loading || !name.trim()}
         className="rounded-full bg-white px-8 py-3 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
       >
-        {loading ? 'Joining...' : 'Join'}
+        {loading ? 'Joining...' : 'Ready'}
       </button>
       {error && <p className="text-red-400">{error}</p>}
     </div>
@@ -358,8 +359,8 @@ function LobbyScreen({
     debounceRef.current = setTimeout(() => onSettingsChange(merged), 300);
   }
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(window.location.href);
+  async function copyCode() {
+    await navigator.clipboard.writeText(state.joinCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -372,9 +373,18 @@ function LobbyScreen({
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-zinc-900 px-4 py-8 text-white">
       <h1 className="text-4xl font-bold">Duel Lobby</h1>
 
-      <button onClick={copyLink} className="rounded bg-zinc-700 px-4 py-2 text-sm hover:bg-zinc-600">
-        {copied ? 'Copied!' : 'Copy Invite Link'}
-      </button>
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-sm text-zinc-400">
+          Give friends this code on the <span className="underline">Join a Duel</span> page
+        </p>
+        <button
+          onClick={copyCode}
+          title="Click to copy"
+          className="rounded-lg bg-zinc-700 px-6 py-3 text-4xl font-bold tracking-[0.3em] hover:bg-zinc-600"
+        >
+          {copied ? 'Copied!' : state.joinCode}
+        </button>
+      </div>
 
       <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-zinc-400">Players</p>
