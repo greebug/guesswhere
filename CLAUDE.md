@@ -179,8 +179,59 @@ phases:
   from Jesse showed actual overlap. Both minimap offsets got bumped well past the logo's
   own ~33px footprint (collapsed `bottom-10`→`bottom-16`, expanded `bottom-24`→`bottom-28`,
   plus the matching hover-bridge height so the hover-to-expand interaction still reaches
-  the answer box). Re-verified geometrically (35px clearance now, up from 11px) but **still
-  not eyeballed in a real browser** — give it one glance next time you're in a round.
+  the answer box). Re-verified geometrically (35px clearance now, up from 11px).
+- **Report-map popups had white-on-white text**, fixed with a global `.maplibregl-popup-content`
+  color override in `globals.css` (MapLibre's popup bubble is hardcoded white but sets no
+  text color of its own, so it inherited the dark theme's white body text). Verified live:
+  clicking a marker now shows dark text.
+- **Minimap's own attribution `(i)` moved to bottom-left** (was bottom-right, sitting right
+  under the "hover to expand" hint in the same corner). Verified via DOM inspection that the
+  control now lives in the empty bottom-left corner.
+- **Holding Control now pins the minimap expanded** even after the cursor leaves it (handy
+  while panning the main map or typing a guess) — window-level keydown/keyup listeners plus
+  a blur safety net so it can't get stuck open. The bottom-right hint swaps between "hover
+  to expand" and "hold ctrl to keep it open" depending on state. Logic verified via dispatched
+  keyboard events (class list, hint text all correct); the actual `h-56`→`h-[50vh]` resize
+  itself could **not** be pixel-verified — same `document.hidden` render-throttling issue,
+  and this specific measurement returned obviously-wrong numbers (an `!important` inline
+  style override didn't change the computed value either), which point at the sandbox, not
+  the code — but it's real-browser-unconfirmed all the same.
+- **Minimap now visually distinguishes dense urban fabric from scrubland**, matching what
+  Google Maps shows and what Jesse's screenshots called out as missing. The tileset's own
+  `landcover.urban_area` class only exists up to z7 and buildings don't render until z11 --
+  confirmed via a live tile fetch that `landuse` polygons carry `kind=residential/commercial`
+  in that dead zone, so `lib/minimapStyle.ts` now splices in a light-grey fill layer for them.
+  Country borders are also darker and thicker (`#adadad`→`#707070`, 0.7px→1.4px). Verified by
+  running `buildMinimapStyle()` directly and inspecting the generated layer array (more
+  reliable here than the sandbox's screenshot capability) plus a live load with zero
+  console/style errors.
+- **Country names now label each side of a border when zoomed in.** New, deliberately light:
+  `web/data/country-borders.json` is Natural Earth's 110m admin-0 countries stripped to just
+  `{name, geometry}` (~186KB, server-only, never shipped to the client) backing a plain
+  point-in-polygon lookup (`lib/server/countryLookup.ts`, bbox-prefiltered linear scan over
+  177 features, no spatial index needed) behind `/api/geo/country`. `MiniMap.tsx` samples two
+  points on a **diagonal** (not left/right — that missed the France/Spain border, which runs
+  mostly east-west, during testing) on `moveend` once zoomed in past z4, labels only when the
+  two sides differ, with a client-side cache keyed on rounded coordinates so small nudges
+  don't re-query. Verified end-to-end live: jumped the actual map instance to the
+  France/Spain border and confirmed both labels appeared, then confirmed they clear correctly
+  moving to mid-France and zooming out.
+
+**Still needs a real-browser once-over — nothing here failed verification, these just
+couldn't be checked in the sandbox (`document.hidden` throttles rendering, so screenshots
+and some geometry reads are unreliable there; server/API/logic-level behavior was verified
+computationally instead wherever possible):** the minimap Mapbox-logo clearance, the Ctrl-pin
+resize animation specifically, and how the new urban-fabric shading / border weight / country
+labels actually look together in a round. None of these are guesses — they're implemented and
+functionally verified — just not eyeballed yet.
+
+**Open question, not yet resolved: Jesse reported Railway showing a "crashed" deploy despite
+the site working.** The log excerpt he pasted was a completely clean, successful Next.js boot
+(no error, no exception) — nothing in it explains a "crashed" label. No `railway.json`/health
+check is configured in the repo. Waiting on him to say what specifically shows it as crashed
+(a dashboard badge? a restart count? an email?) and, if there's an earlier failed attempt in
+the same deploy's logs, to share that part specifically — that's what's actually needed to
+diagnose it, not more of the same clean startup log.
 
 **Verification scripts live in `web/scripts/`** — 80 checks across accounts, active-time
 accrual, leaderboards, prune safety, email tokens, and emailed-link origins. See
