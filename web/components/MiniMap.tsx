@@ -24,7 +24,9 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [layer, setLayer] = useState<Layer>('map');
-  const [expanded, setExpanded] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const expanded = hovering || pinned;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -36,11 +38,14 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
     }
     const map = new maplibregl.Map({
       container: containerRef.current,
-      attributionControl: { compact: true },
+      // Default position (bottom-right) sits right under the "hover to
+      // expand" hint in the same corner -- bottom-left is otherwise empty.
+      attributionControl: false,
       style: buildMinimapStyle(tilesJsonUrl, true),
       center: WORLD_CENTER,
       zoom: WORLD_ZOOM,
     });
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('error', (e) => console.warn('MapLibre error:', e.error));
     mapRef.current = map;
 
@@ -72,6 +77,30 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
     setVisible('hillshade', layer === 'elevation');
   }, [layer]);
 
+  // Holding Control pins the panel expanded even after the cursor leaves it
+  // -- handy while panning the main map or typing a guess with the minimap
+  // still visible. Listens on window rather than the panel itself since the
+  // keypress can happen while focus (and the mouse) is anywhere else on the
+  // page. The blur listener guards against a stuck-open panel if a keyup
+  // never arrives -- e.g. alt-tabbing away while Control is still held.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setPinned(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setPinned(false);
+    };
+    const onBlur = () => setPinned(false);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
   // The main map mounts the Mapbox logo and attribution control at its own
   // bottom-left -- overlapping them would bury an attribution the Mapbox ToS
   // requires stay visible. A prior pass (bottom-10 collapsed / bottom-24
@@ -82,8 +111,8 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
   // for real margin instead of a razor-thin gap.
   return (
     <div
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
       className={`absolute z-20 left-4 transition-all duration-200 ${expanded ? 'bottom-28' : 'bottom-16'}`}
     >
       <div
@@ -105,11 +134,9 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
             </button>
           ))}
         </div>
-        {!expanded && (
-          <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
-            hover to expand
-          </div>
-        )}
+        <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
+          {expanded ? 'hold ctrl to keep it open' : 'hover to expand'}
+        </div>
       </div>
 
       {/* Invisible hover bridge: expanding the panel raises it off the bottom
