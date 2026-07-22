@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Protocol } from 'pmtiles';
 import { layersWithPartialCustomTheme } from 'protomaps-themes-base';
 
 // The stock 'light' theme is low-contrast almost everywhere land-cover is
@@ -35,8 +34,10 @@ const MINIMAP_THEME_OVERRIDES = {
 };
 
 // Self-hosted vector tiles (PLAN.md core invariant: this IS the answer key --
-// see etl/. Served locally for now; see CLAUDE.md for the R2 path once this
-// needs to serve more than "me and my brother").
+// see etl/). Served via the Protomaps Cloudflare Worker (cloudflare/pmtiles-worker/)
+// reading from R2 -- a real TileJSON endpoint, not a raw pmtiles:// byte-range
+// source, since the Worker decodes tiles server-side rather than handing back
+// the archive itself.
 const TILES_SOURCE_ID = 'protomaps';
 const HILLSHADE_SOURCE_ID = 'terrain';
 // AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
@@ -49,14 +50,6 @@ const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrariu
 // same as they would with the main satellite view's visual clues.
 const WORLD_CENTER: [number, number] = [10, 15]; // [lng, lat]
 const WORLD_ZOOM = 1.5;
-
-let protocolRegistered = false;
-function ensureProtocol() {
-  if (protocolRegistered) return;
-  const protocol = new Protocol();
-  maplibregl.addProtocol('pmtiles', protocol.tile);
-  protocolRegistered = true;
-}
 
 type Layer = 'map' | 'elevation';
 
@@ -74,9 +67,12 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    ensureProtocol();
 
-    const tilesUrl = `${window.location.origin}/api/tiles/planet.pmtiles`;
+    const tilesJsonUrl = process.env.NEXT_PUBLIC_TILES_URL;
+    if (!tilesJsonUrl) {
+      console.warn('NEXT_PUBLIC_TILES_URL is not set -- see web/.env.local');
+      return;
+    }
     const map = new maplibregl.Map({
       container: containerRef.current,
       attributionControl: { compact: true },
@@ -84,7 +80,7 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
         version: 8,
         glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
         sources: {
-          [TILES_SOURCE_ID]: { type: 'vector', url: `pmtiles://${tilesUrl}` },
+          [TILES_SOURCE_ID]: { type: 'vector', url: tilesJsonUrl },
           [HILLSHADE_SOURCE_ID]: {
             type: 'raster-dem',
             tiles: [TERRAIN_TILE_URL],

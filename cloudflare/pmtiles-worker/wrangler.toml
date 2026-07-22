@@ -1,0 +1,22 @@
+name = "guesswhere-tiles"
+main = "src/index.ts"
+compatibility_date = "2024-09-02"
+minify = false
+
+# Custom domain (needed for edge caching -- workers.dev URLs don't cache).
+# bingbongblitz.com hosts other games at the root and /trio, so tiles gets
+# its own subdomain. Requires the zone to already be on Cloudflare (it is).
+[[routes]]
+pattern = "tiles.bingbongblitz.com"
+custom_domain = true
+
+# R2 bucket binding -- see CLAUDE.md for the hosting migration this is part of.
+[[r2_buckets]]
+binding = "BUCKET"
+preview_bucket_name = "guesswhere-tiles"
+bucket_name = "guesswhere-tiles"
+
+[vars]
+# TODO: narrow this to the Railway app's domain once it exists (see
+# CLAUDE.md hosting plan) -- "*" is fine for local dev against this Worker.
+ALLOWED_ORIGINS = "*"
