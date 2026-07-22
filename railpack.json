@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": {
+    "node": "22"
+  },
+  "steps": {
+    "install": {
+      "commands": ["npm --prefix web ci"]
+    },
+    "build": {
+      "inputs": [{ "step": "install" }],
+      "commands": ["npm --prefix web run build"]
+    }
+  },
+  "deploy": {
+    "startCommand": "npm --prefix web run start"
+  }
+}
