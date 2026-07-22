@@ -10,6 +10,18 @@ WORKDIR /app
 COPY . .
 
 RUN npm --prefix web ci
+
+# NEXT_PUBLIC_* vars get inlined into the client JS at build time, not read
+# at runtime -- Railway only makes service Variables visible to `RUN` steps
+# if they're re-declared as ARG here (its own Dockerfile docs are explicit
+# about this: no ARG means no access, even though the var exists on the
+# service). CITIES_DB/GAME_DB_PATH don't need this -- they're read server-side
+# via process.env at request time, so plain runtime env vars are enough.
+ARG NEXT_PUBLIC_MAPBOX_TOKEN
+ARG NEXT_PUBLIC_TILES_URL
+ENV NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN
+ENV NEXT_PUBLIC_TILES_URL=$NEXT_PUBLIC_TILES_URL
+
 RUN npm --prefix web run build
 
 EXPOSE 3000
