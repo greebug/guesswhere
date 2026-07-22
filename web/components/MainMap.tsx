@@ -124,6 +124,16 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     if (!map) return;
     centerRef.current = { lat, lon };
 
+    // Applied immediately AND again below once the style is ready --
+    // cameraForBounds is pure geometry (container size + target bounds), it
+    // doesn't need a loaded style, so there's no reason for the zoom floor
+    // to wait on 'load' the way fitBounds/setMaxBounds still do. Without
+    // this, minZoom stayed unset (or the previous round's value) for a real
+    // window on every round transition, not just the first -- fast enough
+    // scrolling right as a round started could zoom out to see the whole
+    // world before settle() got a chance to run.
+    applyWideZoomFloor(map, lat, lon);
+
     const settle = () => {
       applyWideZoomFloor(map, lat, lon);
       const panBounds = boxAroundCenter(lat, lon, PAN_RADIUS_KM * 2, PAN_RADIUS_KM * 2);
