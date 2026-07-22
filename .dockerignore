@@ -1,0 +1,6 @@
+node_modules
+web/.next
+*.pmtiles
+*.osm.pbf
+*.log
+.git
