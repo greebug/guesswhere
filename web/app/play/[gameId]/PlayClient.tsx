@@ -215,7 +215,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
       <div className="relative flex-1">
         <MainMap ref={mainMapRef} lat={round.lat} lon={round.lon} roundKey={round.index} />
 
-        <MiniMap lat={round.lat} lon={round.lon} roundKey={round.index} />
+        <MiniMap lat={round.lat} lon={round.lon} roundKey={round.index} showAnswer={round.revealed} />
 
         <div className="absolute bottom-6 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4">
           <AnswerBox

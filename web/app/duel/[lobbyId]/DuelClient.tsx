@@ -256,7 +256,12 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
         {displayedRound && (
           <>
             <MainMap ref={mainMapRef} lat={displayedRound.lat} lon={displayedRound.lon} roundKey={displayedRound.index} />
-            <MiniMap lat={displayedRound.lat} lon={displayedRound.lon} roundKey={displayedRound.index} />
+            <MiniMap
+              lat={displayedRound.lat}
+              lon={displayedRound.lon}
+              roundKey={displayedRound.index}
+              showAnswer={settled && !!transitionInfo?.timedOut}
+            />
           </>
         )}
 

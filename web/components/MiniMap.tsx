@@ -37,11 +37,16 @@ interface MiniMapProps {
   lat: number;
   lon: number;
   roundKey: number | string;
+  // True once this round is missed -- revealed (solo) or timed out (duel) --
+  // so the player can see where it actually was. Never set for a correct
+  // guess: they already found it themselves.
+  showAnswer?: boolean;
 }
 
-export default function MiniMap({ roundKey }: MiniMapProps) {
+export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: MiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
   const [layer, setLayer] = useState<Layer>('map');
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -137,11 +142,36 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
 
   // New round: back to the same neutral world view, not the answer. Clear
   // border labels immediately rather than waiting for the async moveend
-  // re-check to catch up.
+  // re-check to catch up. Also drop any leftover marker from the previous
+  // round -- showAnswer should flip to false for a fresh round too, but this
+  // guards against a stale dot surviving a render where the two updates land
+  // out of step.
   useEffect(() => {
     mapRef.current?.jumpTo({ center: WORLD_CENTER, zoom: WORLD_ZOOM });
     setBorderLabels(null);
+    markerRef.current?.remove();
+    markerRef.current = null;
   }, [roundKey]);
+
+  // The missed-round marker. Only ever shown for the round it belongs to --
+  // roundKey changes (above) tear it down before a new round's showAnswer
+  // could turn it back on for the wrong city.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!showAnswer) {
+      markerRef.current?.remove();
+      markerRef.current = null;
+      return;
+    }
+    if (!markerRef.current) {
+      // setLngLat before addTo -- addTo calls _update() immediately, which
+      // reads the (otherwise still-unset) position synchronously.
+      markerRef.current = new maplibregl.Marker({ color: '#ef4444' }).setLngLat([lon, lat]).addTo(map);
+    } else {
+      markerRef.current.setLngLat([lon, lat]);
+    }
+  }, [showAnswer, lat, lon, roundKey]);
 
   useEffect(() => {
     const map = mapRef.current;
