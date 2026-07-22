@@ -17,6 +17,12 @@ function getDb(): DatabaseSync {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS games_created_at ON games (created_at);
+    CREATE TABLE IF NOT EXISTS lobbies (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS lobbies_created_at ON lobbies (created_at);
   `);
   return db;
 }
@@ -29,6 +35,19 @@ export function putGame(id: string, data: string, createdAt: number): void {
 
 export function readGame(id: string): string | null {
   const row = getDb().prepare('SELECT data FROM games WHERE id = ?').get(id) as
+    | { data: string }
+    | undefined;
+  return row?.data ?? null;
+}
+
+export function putLobby(id: string, data: string, createdAt: number): void {
+  getDb()
+    .prepare('INSERT OR REPLACE INTO lobbies (id, data, created_at) VALUES (?, ?, ?)')
+    .run(id, data, createdAt);
+}
+
+export function readLobby(id: string): string | null {
+  const row = getDb().prepare('SELECT data FROM lobbies WHERE id = ?').get(id) as
     | { data: string }
     | undefined;
   return row?.data ?? null;

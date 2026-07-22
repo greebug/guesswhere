@@ -34,3 +34,31 @@ body {
 .animate-shake {
   animation: shake 0.4s;
 }
+
+@keyframes timer-critical {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+  50% { box-shadow: 0 0 12px 4px rgba(220, 38, 38, 0.9); }
+}
+.animate-timer-critical {
+  animation: timer-critical 0.8s ease-in-out infinite;
+}
+
+@keyframes round-result {
+  0% { opacity: 0; transform: scale(0.85); }
+  15% { opacity: 1; transform: scale(1.05); }
+  25% { transform: scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-round-result {
+  animation: round-result 2s ease-in-out both;
+}
+
+@keyframes winner-pop {
+  0% { opacity: 0; transform: scale(0.7); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.animate-winner-pop {
+  animation: winner-pop 0.5s ease-out both;
+}

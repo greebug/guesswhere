@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface GameHeaderProps {
   onRecenter: () => void;
@@ -26,6 +27,14 @@ export default function GameHeader({
   totalRounds,
   currentSlide,
 }: GameHeaderProps) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="flex items-center justify-between bg-black/80 px-3 py-2 text-white">
       <Link href="/" className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
@@ -42,6 +51,13 @@ export default function GameHeader({
       </div>
 
       <div className="flex gap-2">
+        <button
+          onClick={copyLink}
+          title="Share this link so a friend can play the same rounds with you"
+          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
+        >
+          {copied ? 'Copied!' : 'Copy Link'}
+        </button>
         <button onClick={onRecenter} className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
           Recenter
         </button>

@@ -40,6 +40,20 @@ export default function PlayClient({ gameId }: { gameId: string }) {
       .catch((e) => setError(e instanceof Error ? e.message : 'failed to load game'));
   }, [gameId]);
 
+  // Party-link mode: if someone else has this same URL open, their guesses/
+  // reveals should show up here without a manual refresh. Silently ignores
+  // transient failures -- a dropped poll shouldn't surface as a page error,
+  // the next tick just tries again.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch(`/api/game/${gameId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => data && setGame(data))
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [gameId]);
+
   async function handleGuess(guess: string) {
     const res = await fetch(`/api/game/${gameId}/guess`, {
       method: 'POST',

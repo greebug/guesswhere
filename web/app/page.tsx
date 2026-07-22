@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const PRESETS = [50_000, 100_000, 500_000, 2_000_000];
 
@@ -77,6 +78,10 @@ export default function Home() {
       </button>
 
       {error && <p className="text-red-400">{error}</p>}
+
+      <Link href="/duel/new" className="text-sm text-zinc-400 underline hover:text-zinc-200">
+        Play a Duel with friends &rarr;
+      </Link>
     </div>
   );
 }
