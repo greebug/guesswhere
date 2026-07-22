@@ -70,11 +70,14 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     }
     mapboxgl.accessToken = token;
 
+    // Constructed already framed to the wide-view box, not a fixed center/zoom
+    // -- otherwise the map shows an arbitrary zoom-10 view for a moment before
+    // the round-positioning effect below fits it to the real bounds once the
+    // style loads, which reads as a visible "zooms out then back in" flash.
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/satellite-v9',
-      center: [lon, lat],
-      zoom: 10,
+      bounds: boxAroundCenter(lat, lon, WIDE_WIDTH_KM, WIDE_HEIGHT_KM),
       maxZoom: MAX_ZOOM,
       attributionControl: false,
       dragRotate: false,
