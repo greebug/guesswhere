@@ -112,15 +112,21 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Adopt the first round immediately; on later round changes, hold the
-  // just-completed round on screen under the result overlay for a beat
-  // before switching, purely a client-side presentational delay -- the
-  // server has already moved on.
+  // Adopt the first live round immediately (no transition pause -- there's
+  // no "previous" round to hold on screen); on later round changes, hold the
+  // just-completed round under the result overlay for a beat before
+  // switching. Deliberately keyed on `displayedRound`, not `roundSeq` --
+  // starting a match doesn't bump roundSeq (only advancing BETWEEN rounds
+  // does), so a `roundSeq`-only check never notices the lobby/countdown ->
+  // playing transition for round 0, leaving the map stuck unmounted for the
+  // whole first round.
   useEffect(() => {
     if (!state) return;
-    if (displayedRoundSeq === null) {
-      setDisplayedRoundSeq(state.roundSeq);
-      setDisplayedRound(state.currentRound);
+    if (displayedRound === null) {
+      if (state.currentRound) {
+        setDisplayedRoundSeq(state.roundSeq);
+        setDisplayedRound(state.currentRound);
+      }
       return;
     }
     if (state.roundSeq !== displayedRoundSeq && !transitionTimeoutRef.current) {
@@ -133,7 +139,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
         transitionTimeoutRef.current = null;
       }, ROUND_RESULT_PAUSE_MS);
     }
-  }, [state, displayedRoundSeq]);
+  }, [state, displayedRoundSeq, displayedRound]);
 
   async function handleJoin(name: string) {
     const res = await fetch(`/api/duel/${lobbyId}/join`, {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 interface GameHeaderProps {
+  gameId: string;
   onRecenter: () => void;
   onReveal: () => void;
   revealDisabled: boolean;
@@ -18,6 +19,7 @@ interface GameHeaderProps {
 // user's request for unusable imagery (heavy cloud cover, etc.) -- distinct
 // from Reveal, since reporting excludes the city from ALL future games too.
 export default function GameHeader({
+  gameId,
   onRecenter,
   onReveal,
   revealDisabled,
@@ -27,12 +29,24 @@ export default function GameHeader({
   totalRounds,
   currentSlide,
 }: GameHeaderProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'working' | 'copied'>('idle');
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  // Gives a friend their OWN independent playthrough of the same 10 cities --
+  // not a live-shared session (an earlier version just copied this page's own
+  // URL, which would mean a friend's guesses/reveals affected this game too;
+  // that's not what was wanted, this clones a fresh unsolved copy instead).
+  async function shareCities() {
+    setCopyState('working');
+    try {
+      const res = await fetch(`/api/game/${gameId}/clone`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed to create share link');
+      const data = await res.json();
+      await navigator.clipboard.writeText(`${window.location.origin}/play/${data.gameId}`);
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 1500);
+    } catch {
+      setCopyState('idle');
+    }
   }
 
   return (
@@ -52,11 +66,12 @@ export default function GameHeader({
 
       <div className="flex gap-2">
         <button
-          onClick={copyLink}
-          title="Share this link so a friend can play the same rounds with you"
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
+          onClick={shareCities}
+          disabled={copyState === 'working'}
+          title="Copy a link that gives a friend their own playthrough of these same 10 cities"
+          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20 disabled:opacity-30"
         >
-          {copied ? 'Copied!' : 'Copy Link'}
+          {copyState === 'copied' ? 'Copied!' : 'Share Cities'}
         </button>
         <button onClick={onRecenter} className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
           Recenter

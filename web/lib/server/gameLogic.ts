@@ -138,6 +138,21 @@ export interface GameSession {
   rounds: RoundState[];
 }
 
+/** Fresh, unsolved copy of another session's exact round set -- same cities,
+ * same order, independent progress. Used for "share these cities" links
+ * (a friend gets their own playthrough, not a shared/live session). */
+export function cloneRoundStates(rounds: RoundState[]): RoundState[] {
+  return rounds.map((r) => ({
+    cityId: r.cityId,
+    lat: r.lat,
+    lon: r.lon,
+    minRenderZoom: r.minRenderZoom,
+    solved: false,
+    revealed: false,
+    canonicalName: null,
+  }));
+}
+
 export function createRoundStates(cities: CityRow[]): RoundState[] {
   return cities.map((c) => ({
     cityId: c.id,
