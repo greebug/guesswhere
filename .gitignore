@@ -1,0 +1,19 @@
+# Bulk geodata never belongs in the repo (see CLAUDE.md -- lives in C:\geodata\ instead)
+*.pmtiles
+*.osm.pbf
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js
+web/.next/
+web/out/
+
+# Env files (contain local paths / tokens)
+web/.env.local
+web/.env*.local
+
+# Misc
+*.log
+.DS_Store

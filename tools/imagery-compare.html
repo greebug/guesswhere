@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Imagery fidelity: Esri vs Mapbox</title>
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 16px; background: #14161a; color: #e6e8ec; }
+  h1 { font-size: 15px; margin: 0 0 10px; font-weight: 600; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  select, input, button { font: inherit; background: #22262e; color: #e6e8ec; border: 1px solid #3a4150; border-radius: 5px; padding: 5px 8px; }
+  input[type=text] { width: 300px; }
+  .panels { display: flex; gap: 14px; flex-wrap: wrap; }
+  .panel h2 { font-size: 12px; margin: 0 0 6px; color: #9aa3b2; font-weight: 500; }
+  .grid { display: grid; grid-template-columns: 256px 256px; grid-template-rows: 256px 256px;
+          width: 512px; height: 512px; background: #000; border: 1px solid #3a4150; }
+  .grid img { width: 256px; height: 256px; display: block; }
+  .note { color: #9aa3b2; margin-top: 10px; max-width: 1050px; }
+  .scale { color: #9aa3b2; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Satellite imagery fidelity check &mdash; Esri World Imagery vs Mapbox Satellite</h1>
+
+<div class="bar">
+  <select id="loc"></select>
+  <label>zoom <select id="zoom"></select></label>
+  <span class="scale" id="scale"></span>
+</div>
+<div class="bar">
+  <label>Mapbox token <input type="text" id="tok" placeholder="pk.eyJ1... (blank = Esri only)"></label>
+  <button id="go">Load</button>
+</div>
+
+<div class="panels">
+  <div class="panel"><h2>Esri World Imagery <span style="color:#5a6272">(no key required)</span></h2><div class="grid" id="esri"></div></div>
+  <div class="panel"><h2>Mapbox Satellite <span style="color:#5a6272">(needs token)</span></h2><div class="grid" id="mapbox"></div></div>
+</div>
+
+<p class="note">Tiles render at native 1:1 &mdash; no upscaling, so what you see is the true source resolution.
+Each panel is 512&times;512 px (2&times;2 tiles). Your pinpoint view needs ~1.9 m/px; z17 is 1.2 m/px at the
+equator and finer toward the poles.</p>
+
+<script>
+// Real 50k-160k population cities pulled from worldcities.csv - the hard cases.
+const CITIES = [
+  ["Eruwa, Nigeria", 7.5497, 3.45],
+  ["Dhrangadhra, India", 22.9896, 71.4631],
+  ["Shuibian, China", 24.1263, 112.7668],
+  ["Satbayev, Kazakhstan", 47.9, 67.5333],
+  ["Huanchaco, Peru", -8.083, -79.119],
+  ["Ende, Indonesia", -8.8333, 121.65],
+  ["Areka, Ethiopia", 7.0667, 37.7],
+  ["Kattagan, Uzbekistan", 40.2, 64.9167],
+  ["Telemaco Borba, Brazil", -24.3239, -50.6158],
+  ["Qal'at Mgouna, Morocco", 31.2414, -6.1283],
+  ["Dong Xoai, Vietnam", 11.5208, 106.85],
+  ["Sahuayo de Morelos, Mexico", 20.0575, -102.7239],
+  ["Izmail, Ukraine", 45.3418, 28.8346],
+  ["Ad Diwem, Sudan", 14.0, 32.3167],
+];
+// Benchmarks for the specific details you named: painted field text, traffic direction.
+const BENCH = [
+  ["-- Rose Bowl, Pasadena (field text)", 34.1613, -118.1676],
+  ["-- Wembley Stadium, London (field text)", 51.5560, -0.2795],
+  ["-- Melbourne Cricket Ground", -37.8200, 144.9834],
+  ["-- Times Square, NYC (traffic)", 40.7580, -73.9855],
+  ["-- M25 motorway, UK (left-hand drive)", 51.6500, -0.3000],
+];
+
+const locSel = document.getElementById('loc'), zoomSel = document.getElementById('zoom');
+[...BENCH, ...CITIES].forEach(([n, la, lo], i) => {
+  const o = document.createElement('option');
+  o.value = i; o.textContent = n; locSel.appendChild(o);
+});
+const ALL = [...BENCH, ...CITIES];
+for (let z = 14; z <= 19; z++) {
+  const o = document.createElement('option');
+  o.value = z; o.textContent = 'z' + z; if (z === 17) o.selected = true; zoomSel.appendChild(o);
+}
+
+function tileXY(lat, lng, z) {
+  const n = 2 ** z;
+  const x = (lng + 180) / 360 * n;
+  const r = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+  return [Math.floor(x), Math.floor(y)];
+}
+
+function render() {
+  const [, lat, lng] = ALL[+locSel.value];
+  const z = +zoomSel.value;
+  const [x, y] = tileXY(lat, lng, z);
+  const tok = document.getElementById('tok').value.trim();
+  const mpp = 156543.03 * Math.cos(lat * Math.PI / 180) / 2 ** z;
+  document.getElementById('scale').textContent =
+    `${mpp.toFixed(2)} m/px here · 512px view ≈ ${(mpp * 512 / 1000).toFixed(2)} km wide`;
+
+  const fill = (el, url) => {
+    el.innerHTML = '';
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      const img = document.createElement('img');
+      img.src = url(z, x + dx, y + dy);
+      img.onerror = () => { img.style.background = '#3a1f1f'; };
+      el.appendChild(img);
+    }
+  };
+  // Esri: note the {z}/{y}/{x} order
+  fill(document.getElementById('esri'),
+    (z, x, y) => `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`);
+  const mb = document.getElementById('mapbox');
+  if (tok) fill(mb, (z, x, y) => `https://api.mapbox.com/v4/mapbox.satellite/${z}/${x}/${y}@2x.jpg90?access_token=${tok}`);
+  else mb.innerHTML = '<div style="grid-column:1/3;grid-row:1/3;display:flex;align-items:center;justify-content:center;color:#5a6272;text-align:center;padding:20px">Paste a Mapbox token above<br>to compare</div>';
+}
+
+document.getElementById('go').onclick = render;
+locSel.onchange = render; zoomSel.onchange = render;
+render();
+</script>
+</body>
+</html>

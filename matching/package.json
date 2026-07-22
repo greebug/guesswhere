@@ -1,0 +1,7 @@
+{
+  "name": "matching",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Phase 2 answer-grading engine, shared between its own CLI test suite (node --test) and the web app.",
+  "main": "grader.js"
+}
