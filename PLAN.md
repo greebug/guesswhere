@@ -204,7 +204,8 @@ increments → matches PLAN.md spec exactly.
 
 **Not yet built:** pinpoint-button click-through test (logic is in place, untested
 live), sounds (implemented via synthesized Web Audio tones, unverified audibly),
-Mapbox ToS ordered ahead of ship. Deferred per plan: leaderboards, multiplayer.
+Mapbox ToS ordered ahead of ship. Deferred per plan: leaderboards (phase 4 -- still
+not started; multiplayer/phase 5 is done, see below and `CLAUDE.md`'s status section).
 
 ### Phase 3 follow-ups (post-launch feedback round)
 
@@ -252,9 +253,26 @@ Mapbox ToS ordered ahead of ship. Deferred per plan: leaderboards, multiplayer.
   the start 30-70km from the answer in a per-city direction; the user asked for the simpler
   "always starts at the world" behavior instead, which is what's shipped.
 
-#### Duels/ranked mode — spec captured, NOT built (needs phase 5 first)
+#### Duels/ranked mode — BUILT (2026-07-22), diverges from the original spec below
 
-User requirements for competitive multiplayer, to build once shared sessions exist:
+What actually shipped (see `CLAUDE.md`'s status section + `web/lib/server/duelLogic.ts`):
+host-configurable per-round timer (auto-skips the round for everyone on expiry),
+"first to N correct" instead of fixed 10 rounds, live leaderboard, join via a 4-char
+code (not a link). Real-time sync is polling (`GET /api/duel/[lobbyId]/state`,
+~750ms) against a server-authoritative lobby with absolute deadline timestamps +
+tick-on-read, not Cloudflare Durable Objects -- the app ended up hosted on Railway
+(a persistent Node process) rather than Workers, so a Durable Object per room was
+never the natural fit it would have been under the original Cloudflare-hosting plan.
+
+Two things from the original spec below were **deliberately not built**, because the
+actual ask when phase 5 was built didn't include them: the mutual skip-vote (Report
+Round exists in solo but not duels at all -- no reveal/skip mechanic in duels v1), and
+any accounts/persistent identity (duels' `playerId` is a throwaway per-lobby
+`localStorage` value). Both are still open for whenever they're actually requested.
+
+Original spec follows, kept for the historical record per this doc's own convention:
+
+User requirements for competitive multiplayer, captured before phase 5 was built:
 - Per-round timer (~5 min); if neither player answers in time, auto-skip to the next round.
 - A **separate mutual skip-vote**, distinct from Report Round: either player can vote to
   skip a round for reasons other than bad imagery, but it only actually skips once **both**
@@ -262,10 +280,6 @@ User requirements for competitive multiplayer, to build once shared sessions exi
   imagery regardless of the other player's opinion); a bare "skip" needs consensus, since
   the round itself is perfectly fine — just less preferred by one player.
 - Ranked games are **not** fixed at 10 rounds — something like "first to 5 correct."
-
-None of this is buildable yet: there is no concept of two players sharing one game session
-at all (no realtime sync, no room/pairing). Phase 5 needs to exist first; this spec is here
-so it isn't lost by the time that phase starts.
 
 Original spec follows.
 

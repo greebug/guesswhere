@@ -11,7 +11,11 @@ these — `etl/cities.sqlite` and `matching/` are the finished, validated artifa
 **Phase 3 (game client, in `web/`): core solo loop works end-to-end**, verified through
 the real running UI — new game, guess/reveal/report, correct-count tracking, an "Only
 Coast" filter (`etl/add-coastal-distance.js` computes `dist_to_coast_km` per city
-against Natural Earth's coastline data), all of it.
+against Natural Earth's coastline data). Reveal (and duel round-timeouts) show
+"City, Country" (`Grader.revealWithCountry()`) — a correct guess still shows just the
+city name, unchanged: the player already knew the country then, only the exact
+spelling was in question, and that's a separate code path (`grade()`'s own
+canonicalName) that was never touched.
 
 **Hosting: done and live.** `guesswhere-production.up.railway.app` on Railway (a
 Dockerfile, not Nixpacks/Railpack — both were tried first and hit real problems, see
@@ -22,17 +26,64 @@ game sessions (and duel lobbies) to a SQLite file at `GAME_DB_PATH`, replacing t
 in-memory `Map`.
 
 **Phase 5 (multiplayer): done.** Two modes:
-- **Party link** — any solo game URL is already shared-by-link; `PlayClient.tsx` polls
-  every ~2s so a friend's progress shows up live. No lobby, no scoring.
-- **Duels** — `/duel/new` creates a named lobby (host picks timer length, target
-  round-wins, population/coast filters), `/duel/[lobbyId]` handles join → countdown →
-  synchronized play → win. Server-authoritative via absolute deadline timestamps +
-  tick-on-read (`web/lib/server/duelLogic.ts`), clients poll `GET .../state` every
-  ~750ms rather than WebSockets (Railway's persistent process makes WS *possible*, but
-  polling needed zero infra changes and is plenty responsive at this game's pace).
+- **"Share Cities"** — NOT a live-shared session (that was tried first as 2s polling
+  on the same game URL, then explicitly walked back per user feedback: sharing your
+  own URL meant a friend's guesses/reveals affected YOUR game too, which wasn't
+  wanted). `GameHeader`'s "Share Cities" button calls `POST /api/game/[gameId]/clone`,
+  which copies the current game's exact round set (same cities, same order) into a
+  brand-new, fully independent `GameSession` — a friend solves it on their own, with
+  zero effect on the original.
+- **Duels** — `/duel/new` creates a lobby (host picks timer length, target
+  round-wins, population/coast filters); host gets back a **4-character join code**
+  (not a link — also walked back from an earlier link-based version per request), and
+  gives it out. Friends go to `/duel/join`, enter the code + name, hit "Ready" (that
+  button *is* the join action — there's no separate ready/not-ready toggle state,
+  nothing else requested implied a waiting-room gate). `/duel/[lobbyId]` still works
+  directly too, for the host and for rejoining after a refresh. Countdown → synced
+  play → win, server-authoritative via absolute deadline timestamps + tick-on-read
+  (`web/lib/server/duelLogic.ts`), clients poll `GET .../state` every ~750ms rather
+  than WebSockets (Railway's persistent process makes WS *possible*, but polling
+  needed zero infra changes and is plenty responsive at this game's pace).
 
-**Not yet built:** phase 4 (accounts + persistent leaderboards — duels currently has no
-accounts, identity is a `playerId` cached in `localStorage` per lobby).
+**Next up (not started): phase 4, leaderboards** — fastest time at a given
+population/coast setting (e.g. "50k, only-coast"). Two open questions to resolve with
+the user before writing code, not just implementation details:
+1. Solo mode has **no elapsed-time tracking at all** today — only duels do (the
+   per-round timer). "Fastest time" needs deciding: duels-only, or does solo need a
+   timer added too?
+2. A real leaderboard needs **some persistent identity** to attribute a score to
+   across sessions/devices. There are currently zero accounts anywhere in the app —
+   duels' `playerId` is a throwaway per-lobby `localStorage` value, nothing persists
+   across a new lobby or a cleared browser. Doesn't have to be full auth for a first
+   cut (even a plain persisted name could work), but it needs deciding, not assuming.
+
+**Known, deliberately out of scope for now (not forgotten, just not asked for yet):**
+no Report Round or Reveal in duels; no reconnection/host-migration if a duel player
+loses their `localStorage` mid-match (they'd rejoin as a new player).
+
+**Two real bugs found and fixed after initial ship — worth knowing about if touching
+these areas again:**
+- **Duels' black screen** (`web/app/duel/[lobbyId]/DuelClient.tsx`): the round-
+  transition-detection effect used `displayedRoundSeq === null` as its "nothing shown
+  yet" sentinel, but that gets consumed by the very first (lobby-phase) state
+  snapshot — and *starting* a match doesn't bump `roundSeq` (only *advancing between*
+  rounds does), so the client never noticed the lobby/countdown→playing transition for
+  round 0. The map stayed unmounted for the entire first round. Fixed by keying off
+  `displayedRound` itself instead. If `roundSeq` logic gets touched again: it only
+  increments on advance, never on start.
+- **Zoom-out-to-whole-world race** (`web/components/MainMap.tsx`): `minZoom` was only
+  ever set inside `settle()`, itself gated behind the map style finishing loading —
+  but `cameraForBounds` (which computes the floor) is pure geometry over the
+  container's size and never needed a loaded style. That gate left a real window on
+  **every** round transition, not just the first, where a fast scroll right as a round
+  started could reach whole-world view before the floor applied. Fixed by applying the
+  floor immediately and unconditionally, in addition to the settled recompute.
+  Verified live via temporary `window.__mainMap` instrumentation (not just reading the
+  code) that `minZoom` is already correct at the earliest possible moment the map
+  object exists, before `isStyleLoaded()` is even true.
+- Both bugs were initially, wrongly, chalked up to "probably just imagery still
+  loading" before being properly reproduced and root-caused — worth being suspicious
+  of that explanation specifically in this codebase, it's hidden real bugs twice.
 
 **Known environment quirk, not a code bug:** the sandboxed browser preview tab used for
 testing reports `document.hidden = true`, which throttles the rendering loop both
@@ -116,6 +167,16 @@ report-round exclusions (see below) — not bulk geodata. Don't gitignore it.
   - `node:sqlite` must be a direct ESM `import` in `.ts` files, never reached via a nested
     `require()` inside an external package — Turbopack's CJS interop breaks on that specific
     combination. See `lib/server/grader.ts`'s comment for the working pattern.
+  - **`next dev` does not fail on TypeScript errors — only `npm run build` does a full
+    check.** This is how a real bug shipped unnoticed: `@types/node@^20` predates
+    `node:sqlite`'s type declarations, `next dev` never complained, and it only surfaced
+    when Railway's Docker build ran `next build` for the first time. Always run
+    `npm run build` before considering a server-side or type-level change verified —
+    `tsc --noEmit` alone is a good fast check but `next build` is the one that matches
+    what actually ships.
+  - `web/lib/server/duelLogic.ts` + `duelStore.ts` — the Duels data model/persistence
+    (see status section above); `web/lib/server/gameDb.ts` holds both the `games` and
+    `lobbies` SQLite tables in one file/connection (no reason to open the DB twice).
 
 ## Grading invariants (phase 2)
 
