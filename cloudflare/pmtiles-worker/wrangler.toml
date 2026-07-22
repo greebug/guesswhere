@@ -17,6 +17,5 @@ preview_bucket_name = "guesswhere-tiles"
 bucket_name = "guesswhere-tiles"
 
 [vars]
-# TODO: narrow this to the Railway app's domain once it exists (see
-# CLAUDE.md hosting plan) -- "*" is fine for local dev against this Worker.
-ALLOWED_ORIGINS = "*"
+# The live app's origin, plus localhost for local dev against this Worker.
+ALLOWED_ORIGINS = "https://guesswhere-production.up.railway.app,http://localhost:3000"
