@@ -6,6 +6,7 @@
   },
   "steps": {
     "install": {
+      "inputs": [{ "local": true, "include": ["."] }],
       "commands": ["npm --prefix web ci"]
     },
     "build": {
@@ -14,6 +15,7 @@
     }
   },
   "deploy": {
-    "startCommand": "npm --prefix web run start"
+    "startCommand": "npm --prefix web run start",
+    "inputs": [{ "step": "build", "include": ["."] }]
   }
 }
