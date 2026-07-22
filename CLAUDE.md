@@ -147,6 +147,35 @@ map instances to `window` temporarily); actual visual rendering needs a real bro
 decision is still current — a couple of things (population-band model, minimap
 starting view) were built one way, then explicitly corrected by the user afterward.
 
+## OPEN RIGHT NOW — read this first (as of 2026-07-22, commit `76b8607`)
+
+Phase 4 is **built, pushed, and live in production**. Deploy verified working against
+`guesswhere-production.up.railway.app`: `emailEnabled: true` (so `RESEND_API_KEY` is
+reaching the process), all 8 leaderboards return, the schema migration ran cleanly against
+the real ~94MB DB, `focus` accrues time correctly (259ms → 3401ms over a 3s gap), and
+`summary` correctly 409s on an unfinished game.
+
+**The one thing genuinely unfinished: a real email has never been sent.** Jesse was about
+to sign up on the live site with `jesse@vannewkirk.com` and click the verification link.
+**Ask how that went before assuming it worked.**
+
+If mail didn't arrive, do NOT retry blindly — `send()` in `lib/server/email.ts` logs
+Resend's HTTP status, and that number names the cause: **401** bad API key, **403** sending
+domain not verified / DNS still propagating, **422** malformed request. Get the status from
+the Railway logs first. Also check spam: first mail from a newly-verified domain often
+lands there, which is expected rather than a bug.
+
+**Also never visually confirmed: the minimap's clearance above the Mapbox logo.** Measured
+geometrically at 11px with no overlap and the logo visible, but the sandbox browser cannot
+screenshot (`document.hidden = true` throttles the render loop). Needs one glance in a real
+browser during a round. Same reason attribution text never populates in the sandbox — both
+MapLibre's and Mapbox's are empty there, which is environmental, not a regression.
+
+**Verification scripts live in `web/scripts/`** — 80 checks across accounts, active-time
+accrual, leaderboards, prune safety, email tokens, and emailed-link origins. See
+`web/scripts/README.md`. Run these before believing any change to those areas is safe;
+the sandbox can't click through the UI, so this is how server behaviour gets proven.
+
 ## The one thing to never break
 
 The answer key is **extracted from the minimap tiles themselves**. Both the rendered label and
