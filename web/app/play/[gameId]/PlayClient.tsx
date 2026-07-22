@@ -37,7 +37,6 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reportPending, setReportPending] = useState(false);
   const [summary, setSummary] = useState<GameSummary | null>(null);
-  const [summaryDismissed, setSummaryDismissed] = useState(false);
   // Total banked on the server, plus a local ticker so the header clock moves
   // between heartbeats rather than jumping every 10 seconds.
   const [bankedMs, setBankedMs] = useState(0);
@@ -186,12 +185,17 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     );
   }
 
+  // Finished: replace the whole screen with the report (map of all 10 cities
+  // + time breakdown), matching the leaderboard result page rather than
+  // overlaying it on top of the last round's map.
+  if (summary) {
+    return <GameReport summary={summary} />;
+  }
+
   const round = game.rounds[currentIndex];
-  const finished = Boolean(summary);
   // Only an unsettled round is still accruing, so a solved one's clock stops
   // moving on screen exactly as it does on the server.
-  const liveMs =
-    finished || round.solved || round.revealed ? bankedMs : bankedMs + (now - tickBase);
+  const liveMs = round.solved || round.revealed ? bankedMs : bankedMs + (now - tickBase);
 
   return (
     <div className="flex h-screen flex-col bg-black">
@@ -226,10 +230,6 @@ export default function PlayClient({ gameId }: { gameId: string }) {
             canNext={currentIndex < game.rounds.length - 1}
           />
         </div>
-
-        {summary && !summaryDismissed && (
-          <GameReport summary={summary} onClose={() => setSummaryDismissed(true)} />
-        )}
       </div>
     </div>
   );

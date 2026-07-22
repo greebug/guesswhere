@@ -203,6 +203,27 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
 
   const current = lobby.status === 'playing' ? lobby.rounds[lobby.currentRoundIndex] : null;
 
+  // Full round-by-round history, for the post-match report's map + list.
+  // Only sent once the duel is over -- every round is settled by then (the
+  // winning round's solvedByPlayerId is set before status flips to
+  // 'finished', see advanceRound), so this doesn't leak an in-progress
+  // round's answer the way exposing it mid-match would.
+  const rounds =
+    lobby.status === 'finished'
+      ? lobby.rounds.map((r, index) => {
+          const city = grader.getCityRow(r.cityId);
+          return {
+            index,
+            lat: r.lat,
+            lon: r.lon,
+            name: city?.canonical_name ?? 'Unknown',
+            country: city?.country ?? '',
+            solvedByPlayerId: r.solvedByPlayerId,
+            timedOut: r.timedOut,
+          };
+        })
+      : null;
+
   return {
     lobbyId: lobby.id,
     joinCode: lobby.joinCode,
@@ -217,6 +238,7 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
       ? { index: lobby.currentRoundIndex, lat: current.lat, lon: current.lon, minRenderZoom: current.minRenderZoom }
       : null,
     lastRound: lastRoundIndex >= 0 ? toLastRound(lastRoundIndex) : null,
+    rounds,
     winnerId: lobby.winnerId,
   };
 }

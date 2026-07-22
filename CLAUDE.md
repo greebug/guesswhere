@@ -147,29 +147,40 @@ map instances to `window` temporarily); actual visual rendering needs a real bro
 decision is still current — a couple of things (population-band model, minimap
 starting view) were built one way, then explicitly corrected by the user afterward.
 
-## OPEN RIGHT NOW — read this first (as of 2026-07-22, commit `76b8607`)
+## OPEN RIGHT NOW — read this first (as of 2026-07-22, post-`76b8607` polish pass)
 
-Phase 4 is **built, pushed, and live in production**. Deploy verified working against
-`guesswhere-production.up.railway.app`: `emailEnabled: true` (so `RESEND_API_KEY` is
-reaching the process), all 8 leaderboards return, the schema migration ran cleanly against
-the real ~94MB DB, `focus` accrues time correctly (259ms → 3401ms over a 3s gap), and
-`summary` correctly 409s on an unfinished game.
+Phase 4 is **built, pushed, live, and fully verified** — including the one thing still
+open as of commit `76b8607`: Jesse signed up on the live site with a real address and the
+verification email arrived, so Resend is confirmed working end to end in production.
+Nothing outstanding from phase 4.
 
-**The one thing genuinely unfinished: a real email has never been sent.** Jesse was about
-to sign up on the live site with `jesse@vannewkirk.com` and click the verification link.
-**Ask how that went before assuming it worked.**
-
-If mail didn't arrive, do NOT retry blindly — `send()` in `lib/server/email.ts` logs
-Resend's HTTP status, and that number names the cause: **401** bad API key, **403** sending
-domain not verified / DNS still propagating, **422** malformed request. Get the status from
-the Railway logs first. Also check spam: first mail from a newly-verified domain often
-lands there, which is expected rather than a bug.
-
-**Also never visually confirmed: the minimap's clearance above the Mapbox logo.** Measured
-geometrically at 11px with no overlap and the logo visible, but the sandbox browser cannot
-screenshot (`document.hidden = true` throttles the render loop). Needs one glance in a real
-browser during a round. Same reason attribution text never populates in the sandbox — both
-MapLibre's and Mapbox's are empty there, which is environmental, not a regression.
+**Now in post-launch polish** — small fixes/requests on top of the finished game, not new
+phases:
+- The end-of-game report (solo `GameReport` and the new duel `DuelReport`) was reworked to
+  match the leaderboard result page's layout exactly: a world map of the round set on top
+  (`ResultMap`, now takes an optional per-dot `color`), the round list below. There is no
+  more "Review Map" button/dismiss flow — the report **replaces** the whole play screen
+  once the game is over rather than overlaying it, so the old "does nothing" bug (dismissing
+  just revealed the last round's map underneath, which read as broken) can't recur by
+  construction.
+- Duels color each round's map dot and list row by whichever player won it (grey for a
+  timeout), via `lib/playerColors.ts`'s fixed 6-color palette keyed on player order. Needed
+  a server change: `buildPublicState()` in `lib/server/duelLogic.ts` only ever exposed the
+  single `lastRound` — it now also sends the full settled `rounds` array once
+  `status === 'finished'`, safe because every round is settled by then.
+  `components/WinnerOverlay.tsx` is gone, superseded by `DuelReport`. Verified with fixture
+  data (a temporary `/dev-duel-report-test` route, since duels can't be won by an automated
+  client without knowing the answer), then the test route was removed.
+- The header's "New Game" link is "Home" everywhere now (`GameHeader.tsx` was the last
+  holdout — `DuelHeader.tsx` already said "Home").
+- **The minimap's clearance above the Mapbox logo was real, not a false alarm.** The prior
+  11px-clearance measurement was geometry-only, never a real screenshot (the sandbox
+  browser can't render one — `document.hidden` throttles it). A real-browser screenshot
+  from Jesse showed actual overlap. Both minimap offsets got bumped well past the logo's
+  own ~33px footprint (collapsed `bottom-10`→`bottom-16`, expanded `bottom-24`→`bottom-28`,
+  plus the matching hover-bridge height so the hover-to-expand interaction still reaches
+  the answer box). Re-verified geometrically (35px clearance now, up from 11px) but **still
+  not eyeballed in a real browser** — give it one glance next time you're in a round.
 
 **Verification scripts live in `web/scripts/`** — 80 checks across accounts, active-time
 accrual, leaderboards, prune safety, email tokens, and emailed-link origins. See

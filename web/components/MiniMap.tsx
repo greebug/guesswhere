@@ -72,16 +72,19 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
     setVisible('hillshade', layer === 'elevation');
   }, [layer]);
 
-  // Collapsed sits at bottom-10 rather than bottom-4: the main map mounts the
-  // Mapbox logo and attribution control at its own bottom-left, occupying
-  // roughly the lowest 33px. Overlapping them would bury an attribution the
-  // Mapbox ToS requires stay visible. The expanded state (bottom-24) already
-  // clears it.
+  // The main map mounts the Mapbox logo and attribution control at its own
+  // bottom-left -- overlapping them would bury an attribution the Mapbox ToS
+  // requires stay visible. A prior pass (bottom-10 collapsed / bottom-24
+  // expanded) measured 11px of clearance geometrically, but never got a real
+  // screenshot to confirm it (sandbox browser can't render one -- see
+  // CLAUDE.md); a real-browser screenshot showed the two actually
+  // overlapping. Bumped both offsets well past the logo's own ~33px height
+  // for real margin instead of a razor-thin gap.
   return (
     <div
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
-      className={`absolute z-20 left-4 transition-all duration-200 ${expanded ? 'bottom-24' : 'bottom-10'}`}
+      className={`absolute z-20 left-4 transition-all duration-200 ${expanded ? 'bottom-28' : 'bottom-16'}`}
     >
       <div
         className={`relative overflow-hidden rounded border-2 border-white/30 shadow-lg transition-all duration-200 ${
@@ -117,7 +120,7 @@ export default function MiniMap({ roundKey }: MiniMapProps) {
           This fills exactly that reclaimed strip so the hover state survives
           the trip. AnswerBox sits at a higher z-index (see PlayClient) so it
           still receives clicks/typing wherever the two visually overlap. */}
-      {expanded && <div className="absolute bottom-0 left-0 h-24 w-[75vw]" />}
+      {expanded && <div className="absolute bottom-0 left-0 h-28 w-[75vw]" />}
     </div>
   );
 }

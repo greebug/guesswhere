@@ -58,7 +58,7 @@ export default function GameHeader({
     <div className="flex items-center justify-between bg-black/80 px-3 py-2 text-white">
       <div className="flex gap-2">
         <Link href="/" className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
-          New Game
+          Home
         </Link>
         <button
           onClick={shareCities}

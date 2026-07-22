@@ -9,6 +9,9 @@ interface Dot {
   name: string;
   lat: number;
   lon: number;
+  /** Marker color. Defaults to the standard red -- duels pass a per-player
+   * color instead so a round's dot matches whoever won it. */
+  color?: string;
 }
 
 /** World map with a dot per city from a finished game. Shares the minimap's
@@ -39,7 +42,7 @@ export default function ResultMap({ dots }: { dots: Dot[] }) {
     mapRef.current = map;
 
     for (const dot of dots) {
-      new maplibregl.Marker({ color: '#ef4444' })
+      new maplibregl.Marker({ color: dot.color ?? '#ef4444' })
         .setLngLat([dot.lon, dot.lat])
         .setPopup(new maplibregl.Popup({ offset: 16 }).setText(dot.name))
         .addTo(map);

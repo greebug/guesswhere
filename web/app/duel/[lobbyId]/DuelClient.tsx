@@ -6,7 +6,7 @@ import MiniMap from '@/components/MiniMap';
 import DuelHeader from '@/components/DuelHeader';
 import AnswerBox from '@/components/AnswerBox';
 import RoundResultOverlay from '@/components/RoundResultOverlay';
-import WinnerOverlay from '@/components/WinnerOverlay';
+import DuelReport, { type DuelReportRound } from '@/components/DuelReport';
 
 interface DuelPlayer {
   id: string;
@@ -47,6 +47,7 @@ interface DuelState {
   roundSeq: number;
   currentRound: CurrentRound | null;
   lastRound: LastRound | null;
+  rounds: DuelReportRound[] | null;
   winnerId: string | null;
 }
 
@@ -230,11 +231,16 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     );
   }
 
-  // playing / finished -- both render the map, since 'finished' shows the
-  // winning round's result overlay + WinnerOverlay on top of it.
+  // Finished: replace the whole screen with the match report (map of every
+  // round colored by whoever won it + a round list), same pattern as the
+  // solo GameReport -- rather than layering a winner card on top of the
+  // last round's map, which is what the old WinnerOverlay did.
+  if (state.status === 'finished' && state.winnerId && state.rounds) {
+    return <DuelReport players={state.players} winnerId={state.winnerId} rounds={state.rounds} />;
+  }
+
   const remainingSeconds = state.roundDeadlineAt ? Math.ceil((state.roundDeadlineAt - now) / 1000) : null;
   const settled = transitionInfo !== null;
-  const winner = state.winnerId ? state.players.find((p) => p.id === state.winnerId) : null;
 
   return (
     <div className="flex h-screen flex-col bg-black">
@@ -280,8 +286,6 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
             />
           </div>
         )}
-
-        {state.status === 'finished' && winner && <WinnerOverlay winnerName={winner.name} players={state.players} />}
       </div>
     </div>
   );
