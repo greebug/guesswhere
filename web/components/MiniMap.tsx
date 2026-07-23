@@ -235,19 +235,24 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
             Ctrl while typing a letter into the answer box triggers a browser
             keyboard shortcut instead of inserting the character, which broke
             the exact use case this exists for -- reading the minimap while
-            typing a guess. A click has no such conflict. */}
+            typing a guess. A click has no such conflict. Self-labeled ("Pin"/
+            "Pinned") rather than a bare icon plus a separate explanatory hint
+            box -- the two together read as two different things to click,
+            and the icon alone was easy to miss entirely. */}
         <div className="absolute top-1 right-1 z-10 text-xs">
           <button
             onClick={() => setPinned((p) => !p)}
             title={pinned ? 'Unpin the minimap' : 'Pin the minimap open'}
             className={`rounded px-2 py-0.5 ${pinned ? 'bg-white text-black' : 'bg-black/50 text-white'}`}
           >
-            📌
+            📌 {pinned ? 'Pinned' : 'Pin'}
           </button>
         </div>
-        <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
-          {pinned ? '📌 pinned -- click to unpin' : expanded ? '📌 to keep open' : 'hover to expand'}
-        </div>
+        {!expanded && (
+          <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
+            hover to expand
+          </div>
+        )}
       </div>
 
       {/* Invisible hover bridge: expanding the panel raises it off the bottom

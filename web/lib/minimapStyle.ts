@@ -16,10 +16,16 @@ const RIVERS_URL = '/rivers.json';
 // The stock Protomaps tileset's own water_river LineString features simply
 // don't exist in the tile data below z9 (confirmed by fetching real tiles
 // along the Ob river and inspecting feature geometry types directly -- not a
-// style minzoom setting, an actual data gap in the public build). Below this
-// zoom, this overlay is the only river data on the minimap; at and above it,
-// the tileset's own (more detailed, locally-accurate) river layer takes over.
-const RIVER_OVERLAY_MAXZOOM = 9;
+// style minzoom setting, an actual data gap in the public build). Below z9,
+// this overlay is the only river data on the minimap.
+//
+// Cut off well before that z9 handoff (not right at it) -- Natural Earth's
+// generalized centerlines don't trace the same path pixel-for-pixel as the
+// tileset's actual OSM-traced rivers, so a hard handoff at z9 read as the
+// two visibly overlapping/diverging for a few zoom levels around the seam.
+// Ending the overlay earlier leaves a small gap with no river shown rather
+// than two slightly different lines shown at once -- the better tradeoff.
+const RIVER_OVERLAY_MAXZOOM = 7;
 // AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
 // Stands in for phase 1's deferred dedicated elevation download.
 const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
