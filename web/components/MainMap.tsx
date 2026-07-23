@@ -12,9 +12,16 @@ import { boxAroundCenter, distanceKm } from '@/lib/geo';
 // Measured directly against the original game: 11.31mi N/S x 26.59mi E/W
 // (18.2km x 42.8km). An earlier estimate of 27km x 12km was a rough guess
 // from the initial description, not a real measurement -- this replaces it.
-const WIDE_WIDTH_KM = 42.8;
-const WIDE_HEIGHT_KM = 18.2;
-const PAN_RADIUS_KM = 50; // "100km left to right" => 50km radius from center
+//
+// Both bumped +10% from that measured baseline (per request): the initial
+// framing -- and, since applyWideZoomFloor derives the "can't zoom out
+// further" cap from this same box, the max zoom-out too -- shows more at a
+// glance. PAN_RADIUS_KM below is trimmed -10% to offset it: more visible
+// without panning, but less new ground to find by panning beyond that
+// wider starting view.
+const WIDE_WIDTH_KM = 42.8 * 1.1; // 47.08
+const WIDE_HEIGHT_KM = 18.2 * 1.1; // 20.02
+const PAN_RADIUS_KM = 50 * 0.9; // 45 -- "100km left to right" was the un-adjusted baseline
 const PINPOINT_WIDTH_KM = 3;
 const PINPOINT_HEIGHT_KM = 1.5;
 const MAX_ZOOM = 18; // matches measured Esri/Mapbox fidelity ceiling in most regions
