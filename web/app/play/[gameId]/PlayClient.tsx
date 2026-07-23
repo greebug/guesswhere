@@ -198,7 +198,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const liveMs = round.solved || round.revealed ? bankedMs : bankedMs + (now - tickBase);
 
   return (
-    <div className="flex h-screen flex-col bg-black">
+    <div className="flex h-screen flex-col overflow-hidden overscroll-none bg-black">
       <GameHeader
         gameId={gameId}
         onRecenter={() => mainMapRef.current?.recenterPinpoint()}

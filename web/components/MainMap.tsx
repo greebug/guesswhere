@@ -18,7 +18,6 @@ const PAN_RADIUS_KM = 50; // "100km left to right" => 50km radius from center
 const PINPOINT_WIDTH_KM = 3;
 const PINPOINT_HEIGHT_KM = 1.5;
 const MAX_ZOOM = 18; // matches measured Esri/Mapbox fidelity ceiling in most regions
-const REBOUND_FRACTION = 0.5; // "moves you back closer to the middle" on release -- not all the way
 
 // Recomputes and reapplies the "can't zoom out past 27km wide" floor for the
 // container's CURRENT size. Must be re-run on every resize, not just once --
@@ -85,17 +84,6 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
     mapRef.current = map;
-
-    // "moves you back closer to the middle" -- eases partway back to the
-    // round's center after a drag, rather than either letting the player
-    // stay wherever they panned or snapping fully back.
-    map.on('dragend', () => {
-      const { lat: cLat, lon: cLon } = centerRef.current;
-      const cur = map.getCenter();
-      const reboundLon = cur.lng + (cLon - cur.lng) * REBOUND_FRACTION;
-      const reboundLat = cur.lat + (cLat - cur.lat) * REBOUND_FRACTION;
-      map.easeTo({ center: [reboundLon, reboundLat], duration: 600 });
-    });
 
     // The "27km wide, can't zoom out further" cap is viewport-size-dependent
     // (cameraForBounds computes zoom from the container's CSS pixel

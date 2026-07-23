@@ -182,30 +182,6 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
     setVisible('hillshade', layer === 'elevation');
   }, [layer]);
 
-  // Holding Control pins the panel expanded even after the cursor leaves it
-  // -- handy while panning the main map or typing a guess with the minimap
-  // still visible. Listens on window rather than the panel itself since the
-  // keypress can happen while focus (and the mouse) is anywhere else on the
-  // page. The blur listener guards against a stuck-open panel if a keyup
-  // never arrives -- e.g. alt-tabbing away while Control is still held.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Control') setPinned(true);
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Control') setPinned(false);
-    };
-    const onBlur = () => setPinned(false);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
-
   // The main map mounts the Mapbox logo and attribution control at its own
   // bottom-left -- overlapping them would bury an attribution the Mapbox ToS
   // requires stay visible. A prior pass (bottom-10 collapsed / bottom-24
@@ -255,8 +231,22 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
             </button>
           ))}
         </div>
+        {/* Click to pin, not hold-Ctrl-to-pin (the prior mechanism): holding
+            Ctrl while typing a letter into the answer box triggers a browser
+            keyboard shortcut instead of inserting the character, which broke
+            the exact use case this exists for -- reading the minimap while
+            typing a guess. A click has no such conflict. */}
+        <div className="absolute top-1 right-1 z-10 text-xs">
+          <button
+            onClick={() => setPinned((p) => !p)}
+            title={pinned ? 'Unpin the minimap' : 'Pin the minimap open'}
+            className={`rounded px-2 py-0.5 ${pinned ? 'bg-white text-black' : 'bg-black/50 text-white'}`}
+          >
+            📌
+          </button>
+        </div>
         <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
-          {expanded ? 'hold ctrl to keep it open' : 'hover to expand'}
+          {pinned ? '📌 pinned -- click to unpin' : expanded ? '📌 to keep open' : 'hover to expand'}
         </div>
       </div>
 

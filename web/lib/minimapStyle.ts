@@ -8,6 +8,18 @@ import { layersWithPartialCustomTheme } from 'protomaps-themes-base';
 // the archive itself.
 export const TILES_SOURCE_ID = 'protomaps';
 export const HILLSHADE_SOURCE_ID = 'terrain';
+export const RIVERS_SOURCE_ID = 'ne-rivers';
+// Served from web/public/rivers.json -- Natural Earth's ne_50m_rivers_lake_centerlines,
+// trimmed to River features only, {min_zoom, geometry}. See buildRiverOverlayLayers()
+// below for why this exists at all.
+const RIVERS_URL = '/rivers.json';
+// The stock Protomaps tileset's own water_river LineString features simply
+// don't exist in the tile data below z9 (confirmed by fetching real tiles
+// along the Ob river and inspecting feature geometry types directly -- not a
+// style minzoom setting, an actual data gap in the public build). Below this
+// zoom, this overlay is the only river data on the minimap; at and above it,
+// the tileset's own (more detailed, locally-accurate) river layer takes over.
+const RIVER_OVERLAY_MAXZOOM = 9;
 // AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
 // Stands in for phase 1's deferred dedicated elevation download.
 const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
@@ -65,18 +77,52 @@ const URBAN_FABRIC_LAYER: LayerSpecification = {
   },
 };
 
-/** Inserts a layer right before the first layer with the given id -- used to
- * slot the urban-fabric fill in under the specific-purpose landuse layers
- * (park, hospital, school...) so those still win visually if they overlap,
- * while still drawing over the plain earth/landcover fill beneath. */
+/** Inserts one or more layers right before the first layer with the given id
+ * -- used to slot the urban-fabric fill in under the specific-purpose
+ * landuse layers (park, hospital, school...) so those still win visually if
+ * they overlap, while still drawing over the plain earth/landcover fill
+ * beneath; and to slot the river overlay in right where the tileset's own
+ * water_river layer sits, so the z9 handoff between them is seamless. */
 function insertBefore(
   layers: LayerSpecification[],
   beforeId: string,
-  layer: LayerSpecification
+  layer: LayerSpecification | LayerSpecification[]
 ): LayerSpecification[] {
+  const toInsert = Array.isArray(layer) ? layer : [layer];
   const index = layers.findIndex((l) => l.id === beforeId);
-  if (index === -1) return [...layers, layer];
-  return [...layers.slice(0, index), layer, ...layers.slice(index)];
+  if (index === -1) return [...layers, ...toInsert];
+  return [...layers.slice(0, index), ...toInsert, ...layers.slice(index)];
+}
+
+// Natural Earth curates a per-river min_zoom (2-5 in the 50m set) so major
+// rivers appear before minor tributaries as you zoom in -- worth preserving
+// rather than flattening to one cutoff. MapLibre doesn't support a
+// per-feature data-driven zoom threshold in a filter (zoom expressions are
+// only valid in step/interpolate), so this buckets by the floor of min_zoom
+// into a handful of layers, each gated by both a static filter on the
+// bucket's range and the layer's own `minzoom`.
+const RIVER_ZOOM_BUCKETS = [2, 3, 4, 5] as const;
+
+function buildRiverOverlayLayers(): LayerSpecification[] {
+  return RIVER_ZOOM_BUCKETS.map((bucket, i) => {
+    const next: number | undefined = RIVER_ZOOM_BUCKETS[i + 1];
+    const filter =
+      next === undefined
+        ? ['>=', ['get', 'min_zoom'], bucket]
+        : ['all', ['>=', ['get', 'min_zoom'], bucket], ['<', ['get', 'min_zoom'], next]];
+    return {
+      id: `ne_rivers_${bucket}`,
+      type: 'line',
+      source: RIVERS_SOURCE_ID,
+      minzoom: bucket,
+      maxzoom: RIVER_OVERLAY_MAXZOOM,
+      filter,
+      paint: {
+        'line-color': MINIMAP_THEME_OVERRIDES.water,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.6, RIVER_OVERLAY_MAXZOOM, 1.2],
+      },
+    } as unknown as LayerSpecification;
+  });
 }
 
 /** Country-level boundary lines are the same 0.7px width for every theme --
@@ -101,6 +147,7 @@ export function buildMinimapStyle(
 ): StyleSpecification {
   const sources: StyleSpecification['sources'] = {
     [TILES_SOURCE_ID]: { type: 'vector', url: tilesJsonUrl },
+    [RIVERS_SOURCE_ID]: { type: 'geojson', data: RIVERS_URL },
   };
   if (withHillshade) {
     sources[HILLSHADE_SOURCE_ID] = {
@@ -114,9 +161,13 @@ export function buildMinimapStyle(
 
   const baseLayers = thickenCountryBorders(
     insertBefore(
-      layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
-      'landuse_park',
-      URBAN_FABRIC_LAYER
+      insertBefore(
+        layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
+        'landuse_park',
+        URBAN_FABRIC_LAYER
+      ),
+      'water_river',
+      buildRiverOverlayLayers()
     )
   );
 

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Grader } from './grader';
 import { pickReplacementCity } from './gameLogic';
+import { addReportedId, getReportedIds } from './reportedCities';
 
 const COUNTDOWN_MS = 5000;
 
@@ -22,6 +23,9 @@ export interface DuelRound {
   minRenderZoom: number;
   solvedByPlayerId: string | null;
   timedOut: boolean;
+  /** Player ids who've hit Report on this round. Plain array, not a Set --
+   * the whole lobby is JSON.stringify'd for storage (see duelStore.ts). */
+  reportedBy: string[];
 }
 
 export interface DuelSettings {
@@ -130,6 +134,7 @@ function pickNextRound(lobby: DuelLobby, grader: Grader): DuelRound {
     minRenderZoom: city.min_render_zoom,
     solvedByPlayerId: null,
     timedOut: false,
+    reportedBy: [],
   };
 }
 
@@ -188,11 +193,12 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
   const toLastRound = (index: number) => {
     const r = lobby.rounds[index];
     if (!r) return null;
-    // Timed out (nobody solved it) gets the country appended, same as solo
-    // reveal -- a solved round doesn't, the winner already knew the country.
-    const canonicalName = r.timedOut
-      ? grader.revealWithCountry(r.cityId)
-      : (grader.getCityRow(r.cityId)?.canonical_name ?? null);
+    // Always includes the country, win or timeout. This is a shared broadcast
+    // every player in the lobby sees -- unlike solo's individual grade()
+    // feedback (untouched, see CLAUDE.md), there's no per-viewer distinction
+    // to key off, and everyone but the solver still needs the country to
+    // learn from the round.
+    const canonicalName = grader.revealWithCountry(r.cityId);
     return { index, solvedByPlayerId: r.solvedByPlayerId, timedOut: r.timedOut, canonicalName };
   };
 
@@ -235,7 +241,15 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
     roundDeadlineAt: lobby.roundDeadlineAt,
     roundSeq: lobby.roundSeq,
     currentRound: current
-      ? { index: lobby.currentRoundIndex, lat: current.lat, lon: current.lon, minRenderZoom: current.minRenderZoom }
+      ? {
+          index: lobby.currentRoundIndex,
+          lat: current.lat,
+          lon: current.lon,
+          minRenderZoom: current.minRenderZoom,
+          // Safe to expose in full -- it's just player ids, not the answer --
+          // so a reloading/rejoining client can show "2/4 reported" correctly.
+          reportedBy: current.reportedBy,
+        }
       : null,
     lastRound: lastRoundIndex >= 0 ? toLastRound(lastRoundIndex) : null,
     rounds,
@@ -266,4 +280,38 @@ export function submitGuess(
   }
   advanceRound(lobby, playerId, grader);
   return { correct: true, wonRound: true, canonicalName: result.canonicalName };
+}
+
+/** "Report round": bad/unusable imagery, mirroring solo's Report Round
+ * (reportedCities.ts, game/[gameId]/report/route.ts) -- same global
+ * blocklist, same "swap in a fresh city in the same slot, no score change"
+ * semantics -- but gated on *every* player in the lobby agreeing, since a
+ * duel round is shared rather than one person's own game. Throws if
+ * pickReplacementCity can't find one (caller should catch, same as solo's
+ * report route does). */
+export function reportRound(lobby: DuelLobby, playerId: string, grader: Grader): void {
+  if (lobby.status !== 'playing') return;
+  const current = lobby.rounds[lobby.currentRoundIndex];
+  if (current.solvedByPlayerId || current.timedOut) return;
+  if (!current.reportedBy.includes(playerId)) current.reportedBy.push(playerId);
+  if (current.reportedBy.length < lobby.players.length) return;
+
+  addReportedId(current.cityId);
+  const excludeIds = new Set([...getReportedIds(), ...lobby.rounds.map((r) => r.cityId)]);
+  const replacement = pickReplacementCity(
+    lobby.settings.targetPopulation,
+    grader,
+    excludeIds,
+    new Set(), // duels don't enforce cross-round country uniqueness -- see pickNextRound
+    lobby.settings.onlyCoast
+  );
+
+  current.cityId = replacement.id;
+  current.lat = replacement.lat;
+  current.lon = replacement.lon;
+  current.minRenderZoom = replacement.min_render_zoom;
+  current.reportedBy = [];
+  // Fresh timer -- time spent staring at unusable imagery shouldn't count
+  // against the replacement, matching solo's accrue-then-zero.
+  lobby.roundDeadlineAt = Date.now() + lobby.settings.timerSeconds * 1000;
 }

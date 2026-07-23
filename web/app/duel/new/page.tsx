@@ -55,8 +55,18 @@ export default function NewDuel() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-zinc-900 px-4 py-8 text-white">
       <div className="text-center">
         <h1 className="text-4xl font-bold">Duels</h1>
-        <p className="mt-2 text-zinc-400">Create a lobby, share the link, race to solve rounds first.</p>
+        <p className="mt-2 text-zinc-400">Create a lobby, share the join code, race to solve rounds first.</p>
       </div>
+
+      <details className="w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-3 text-sm text-zinc-400">
+        <summary className="cursor-pointer font-medium text-zinc-300">How duels differ from solo</summary>
+        <ul className="mt-2 list-disc space-y-1.5 pl-4">
+          <li>Rounds don&apos;t follow solo&apos;s &quot;no two cities share a country&quot; rule -- each round is picked independently, so the same country can come up more than once in a match.</li>
+          <li>There&apos;s no Reveal button. A round nobody solves before the timer runs out is shown to everyone automatically instead.</li>
+          <li>Report Round exists here too, but it only skips the round once <em>every</em> player has reported it -- not just one.</li>
+          <li>Duels don&apos;t feed the solo leaderboards -- it&apos;s a separate mode, scored by first-to-N round wins instead.</li>
+        </ul>
+      </details>
 
       <div className="flex w-full max-w-sm flex-col gap-5">
         {user ? (

@@ -26,6 +26,7 @@ interface CurrentRound {
   lat: number;
   lon: number;
   minRenderZoom: number;
+  reportedBy: string[];
 }
 
 interface LastRound {
@@ -67,12 +68,9 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const [displayedRoundSeq, setDisplayedRoundSeq] = useState<number | null>(null);
   const [displayedRound, setDisplayedRound] = useState<CurrentRound | null>(null);
   const [transitionInfo, setTransitionInfo] = useState<LastRound | null>(null);
-  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const stateRef = useRef<DuelState | null>(null);
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+  // Wall-clock start of the current pause, not a setTimeout handle -- see the
+  // effect below for why.
+  const transitionStartRef = useRef<number | null>(null);
 
   const mainMapRef = useRef<MainMapHandle>(null);
 
@@ -122,6 +120,13 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   // does), so a `roundSeq`-only check never notices the lobby/countdown ->
   // playing transition for round 0, leaving the map stuck unmounted for the
   // whole first round.
+  //
+  // The pause itself is driven by a wall-clock comparison re-checked on every
+  // poll tick, not a one-shot setTimeout -- a dropped/delayed timer (e.g. a
+  // backgrounded tab throttling JS timers) used to leave the round genuinely
+  // stuck forever with no retry, requiring a manual reload. Every poll now
+  // re-evaluates "has the pause elapsed?", so it self-heals the moment
+  // polling resumes, the same way every other piece of duel state here does.
   useEffect(() => {
     if (!state) return;
     if (displayedRound === null) {
@@ -131,15 +136,17 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
       }
       return;
     }
-    if (state.roundSeq !== displayedRoundSeq && !transitionTimeoutRef.current) {
+    if (state.roundSeq === displayedRoundSeq) return;
+    if (transitionStartRef.current === null) {
+      transitionStartRef.current = Date.now();
       setTransitionInfo(state.lastRound);
-      transitionTimeoutRef.current = setTimeout(() => {
-        const latest = stateRef.current;
-        setDisplayedRoundSeq(latest ? latest.roundSeq : state.roundSeq);
-        setDisplayedRound(latest ? latest.currentRound : state.currentRound);
-        setTransitionInfo(null);
-        transitionTimeoutRef.current = null;
-      }, ROUND_RESULT_PAUSE_MS);
+      return;
+    }
+    if (Date.now() - transitionStartRef.current >= ROUND_RESULT_PAUSE_MS) {
+      setDisplayedRoundSeq(state.roundSeq);
+      setDisplayedRound(state.currentRound);
+      setTransitionInfo(null);
+      transitionStartRef.current = null;
     }
   }, [state, displayedRoundSeq, displayedRound]);
 
@@ -186,6 +193,16 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     const data = await res.json();
     setState(data.state);
     return { correct: !!data.correct, canonicalName: data.canonicalName ?? null };
+  }
+
+  async function handleReport() {
+    if (!playerId) return;
+    const res = await fetch(`/api/duel/${lobbyId}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId }),
+    });
+    if (res.ok) setState((await res.json()).state);
   }
 
   if (notFound) {
@@ -243,13 +260,17 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const settled = transitionInfo !== null;
 
   return (
-    <div className="flex h-screen flex-col bg-black">
+    <div className="flex h-screen flex-col overflow-hidden overscroll-none bg-black">
       <DuelHeader
         players={state.players}
         targetRounds={state.settings.targetRounds}
         selfPlayerId={playerId}
         remainingSeconds={state.status === 'playing' ? remainingSeconds : null}
         onRecenter={() => mainMapRef.current?.recenterPinpoint()}
+        onReport={handleReport}
+        reportedBy={state.currentRound?.reportedBy ?? []}
+        totalPlayers={state.players.length}
+        reportDisabled={settled}
       />
 
       <div className="relative flex-1">
@@ -260,7 +281,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
               lat={displayedRound.lat}
               lon={displayedRound.lon}
               roundKey={displayedRound.index}
-              showAnswer={settled && !!transitionInfo?.timedOut}
+              showAnswer={settled}
             />
           </>
         )}
