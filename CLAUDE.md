@@ -17,7 +17,10 @@ city name, unchanged: the player already knew the country then, only the exact
 spelling was in question, and that's a separate code path (`grade()`'s own
 canonicalName) that was never touched.
 
-**Hosting: done and live.** `guesswhere-production.up.railway.app` on Railway (a
+**Hosting: now served at `bingbongblitz.com/guesswhere`** (see "Domain migration"
+below). Still the same Railway service underneath —
+`guesswhere-production.up.railway.app` remains the origin, but its root now
+redirects into `/guesswhere` and the public address is the custom domain. (a
 Dockerfile, not Nixpacks/Railpack — both were tried first and hit real problems, see
 git history on `Dockerfile`/commit messages if curious). Tiles serve from Cloudflare R2
 via the Protomaps Worker at `tiles.bingbongblitz.com` (`cloudflare/pmtiles-worker/`) —
@@ -147,91 +150,186 @@ map instances to `window` temporarily); actual visual rendering needs a real bro
 decision is still current — a couple of things (population-band model, minimap
 starting view) were built one way, then explicitly corrected by the user afterward.
 
-## OPEN RIGHT NOW — read this first (as of 2026-07-22, post-`76b8607` polish pass)
+## Domain migration — Guesswhere lives under a base path now (2026-07-24)
 
-Phase 4 is **built, pushed, live, and fully verified** — including the one thing still
-open as of commit `76b8607`: Jesse signed up on the live site with a real address and the
-verification email arrived, so Resend is confirmed working end to end in production.
-Nothing outstanding from phase 4.
+All four of Jesse's games moved under one domain: `bingbongblitz.com/blitz`,
+`/trio`, `/guesswhere`, `/dabashi`. A **new Cloudflare Worker** at
+`../bingbongblitz-hub/` owns `bingbongblitz.com/*`, serves the landing page, and
+proxies each prefix to the game that owns it. Read that repo's README before
+touching any of this — it holds the routing model and the deploy order.
 
-**Now in post-launch polish** — small fixes/requests on top of the finished game, not new
-phases:
-- The end-of-game report (solo `GameReport` and the new duel `DuelReport`) was reworked to
-  match the leaderboard result page's layout exactly: a world map of the round set on top
-  (`ResultMap`, now takes an optional per-dot `color`), the round list below. There is no
-  more "Review Map" button/dismiss flow — the report **replaces** the whole play screen
-  once the game is over rather than overlaying it, so the old "does nothing" bug (dismissing
-  just revealed the last round's map underneath, which read as broken) can't recur by
-  construction.
-- Duels color each round's map dot and list row by whichever player won it (grey for a
-  timeout), via `lib/playerColors.ts`'s fixed 6-color palette keyed on player order. Needed
-  a server change: `buildPublicState()` in `lib/server/duelLogic.ts` only ever exposed the
-  single `lastRound` — it now also sends the full settled `rounds` array once
-  `status === 'finished'`, safe because every round is settled by then.
-  `components/WinnerOverlay.tsx` is gone, superseded by `DuelReport`. Verified with fixture
-  data (a temporary `/dev-duel-report-test` route, since duels can't be won by an automated
-  client without knowing the answer), then the test route was removed.
-- The header's "New Game" link is "Home" everywhere now (`GameHeader.tsx` was the last
-  holdout — `DuelHeader.tsx` already said "Home").
-- **The minimap's clearance above the Mapbox logo was real, not a false alarm.** The prior
-  11px-clearance measurement was geometry-only, never a real screenshot (the sandbox
-  browser can't render one — `document.hidden` throttles it). A real-browser screenshot
-  from Jesse showed actual overlap. Both minimap offsets got bumped well past the logo's
-  own ~33px footprint (collapsed `bottom-10`→`bottom-16`, expanded `bottom-24`→`bottom-28`,
-  plus the matching hover-bridge height so the hover-to-expand interaction still reaches
-  the answer box). Re-verified geometrically (35px clearance now, up from 11px).
-- **Report-map popups had white-on-white text**, fixed with a global `.maplibregl-popup-content`
-  color override in `globals.css` (MapLibre's popup bubble is hardcoded white but sets no
-  text color of its own, so it inherited the dark theme's white body text). Verified live:
-  clicking a marker now shows dark text.
-- **Minimap's own attribution `(i)` moved to bottom-left** (was bottom-right, sitting right
-  under the "hover to expand" hint in the same corner). Verified via DOM inspection that the
-  control now lives in the empty bottom-left corner.
-- **Holding Control now pins the minimap expanded** even after the cursor leaves it (handy
-  while panning the main map or typing a guess) — window-level keydown/keyup listeners plus
-  a blur safety net so it can't get stuck open. The bottom-right hint swaps between "hover
-  to expand" and "hold ctrl to keep it open" depending on state. Logic verified via dispatched
-  keyboard events (class list, hint text all correct); the actual `h-56`→`h-[50vh]` resize
-  itself could **not** be pixel-verified — same `document.hidden` render-throttling issue,
-  and this specific measurement returned obviously-wrong numbers (an `!important` inline
-  style override didn't change the computed value either), which point at the sandbox, not
-  the code — but it's real-browser-unconfirmed all the same.
-- **Minimap now visually distinguishes dense urban fabric from scrubland**, matching what
-  Google Maps shows and what Jesse's screenshots called out as missing. The tileset's own
-  `landcover.urban_area` class only exists up to z7 and buildings don't render until z11 --
-  confirmed via a live tile fetch that `landuse` polygons carry `kind=residential/commercial`
-  in that dead zone, so `lib/minimapStyle.ts` now splices in a light-grey fill layer for them.
-  Country borders are also darker and thicker (`#adadad`→`#707070`, 0.7px→1.4px). Verified by
-  running `buildMinimapStyle()` directly and inspecting the generated layer array (more
-  reliable here than the sandbox's screenshot capability) plus a live load with zero
-  console/style errors.
-- **Country names now label each side of a border when zoomed in.** New, deliberately light:
-  `web/data/country-borders.json` is Natural Earth's 110m admin-0 countries stripped to just
-  `{name, geometry}` (~186KB, server-only, never shipped to the client) backing a plain
-  point-in-polygon lookup (`lib/server/countryLookup.ts`, bbox-prefiltered linear scan over
-  177 features, no spatial index needed) behind `/api/geo/country`. `MiniMap.tsx` samples two
-  points on a **diagonal** (not left/right — that missed the France/Spain border, which runs
-  mostly east-west, during testing) on `moveend` once zoomed in past z4, labels only when the
-  two sides differ, with a client-side cache keyed on rounded coordinates so small nudges
-  don't re-query. Verified end-to-end live: jumped the actual map instance to the
-  France/Spain border and confirmed both labels appeared, then confirmed they clear correctly
-  moving to mid-France and zooming out.
+What this changed inside `web/`, and why each piece matters:
 
-**Still needs a real-browser once-over — nothing here failed verification, these just
-couldn't be checked in the sandbox (`document.hidden` throttles rendering, so screenshots
-and some geometry reads are unreliable there; server/API/logic-level behavior was verified
-computationally instead wherever possible):** the minimap Mapbox-logo clearance, the Ctrl-pin
-resize animation specifically, and how the new urban-fabric shading / border weight / country
-labels actually look together in a round. None of these are guesses — they're implemented and
-functionally verified — just not eyeballed yet.
+- **`next.config.ts` has `basePath: '/guesswhere'`.** It rewrites `<Link>`,
+  `router.push()`, and every `/_next/*` asset URL. It does **NOT** rewrite
+  strings passed to `fetch()` — Next can't tell an app-relative path from a
+  deliberate absolute one.
+- **Therefore every client fetch goes through `api()`** (`lib/basePath.ts`).
+  All 28 call sites across 16 files were converted. **A new `fetch('/api/...')`
+  written without `api()` will 404 in production and work fine in local dev if
+  you happen to hit the origin directly** — that's the trap to watch for.
+- **`/rivers.json`** (`lib/minimapStyle.ts`) is a plain public asset, so it
+  needed the prefix explicitly too. Same rule as fetch.
+- **The `gw_session` cookie is scoped to `/guesswhere`**, not `/` — three other
+  games share this origin now. `cookies().delete` must pass the **same path**,
+  or sign-out silently fails: browsers match cookies for deletion on
+  name+domain+path.
+- **`appUrl()` still returns the ORIGIN only** (its 12 tests depend on that);
+  `lib/server/email.ts` appends `BASE_PATH`. Set `APP_URL=https://bingbongblitz.com`
+  on Railway — **without a path** — or emailed links get the prefix twice.
+- **The origin root 307s to `/guesswhere`** via a `basePath: false` redirect, so
+  old bookmarks and previously-emailed links still land somewhere.
+- **`cloudflare/pmtiles-worker/wrangler.toml`'s `ALLOWED_ORIGINS`** gained
+  `https://bingbongblitz.com`. Redeploy that Worker or the minimap gets
+  CORS-rejected.
 
-**Open question, not yet resolved: Jesse reported Railway showing a "crashed" deploy despite
-the site working.** The log excerpt he pasted was a completely clean, successful Next.js boot
-(no error, no exception) — nothing in it explains a "crashed" label. No `railway.json`/health
-check is configured in the repo. Waiting on him to say what specifically shows it as crashed
-(a dashboard badge? a restart count? an email?) and, if there's an earlier failed attempt in
-the same deploy's logs, to share that part specifically — that's what's actually needed to
-diagnose it, not more of the same clean startup log.
+Verified end-to-end locally through the real Worker: game creation, guess
+grading, the leaderboard API, `rivers.json`, asset prefixing (no un-prefixed
+`/_next/` refs remain), and Blitz's socket.io handshake including the WebSocket
+upgrade. **Not yet deployed** — nothing has been pushed.
+
+## OPEN RIGHT NOW — read this first (as of 2026-07-23)
+
+Everything from the 2026-07-22 post-`76b8607` polish pass (end-of-game report rework,
+duel round colors, minimap logo clearance, popup contrast, urban-fabric shading, country
+border labels, etc.) shipped, and Jesse subsequently played it live with friends — so
+treat that whole pass as **confirmed working**, not just implemented. That live playtest
+produced a fresh, larger round of feedback, all shipped across two commits
+(`6930a9b`, `3b6ff68`) plus a follow-up framing tweak (`16669b1`):
+
+- Duels: added a Report Round button (mirrors solo's, requires every player to agree),
+  round-end summaries now always include the country (not just on timeout), the minimap
+  answer-pin shows for every settled round rather than just timeouts, and a real bug was
+  found and fixed — a fragile one-shot `setTimeout` driving the round-transition pause
+  could leave a duel stuck on the previous round forever if a backgrounded tab throttled
+  it. Replaced with a poll-driven wall-clock check (self-healing, matches the rest of the
+  duel architecture's tick-on-read philosophy).
+- Solo/shared: removed a redundant "ease back toward center on every drag" behavior in
+  `MainMap.tsx` (already fully covered by `maxBounds`, and the reported cause of an
+  annoying pan snap-back even inside the valid pan radius); replaced hold-Ctrl-to-pin the
+  minimap with a click-to-toggle button (holding Ctrl broke typing into the answer box —
+  confirmed, not a guess: Ctrl+letter is a reserved browser shortcut in virtually every
+  browser); scoped page-scroll lockout to just the two gameplay screens; added a Natural
+  Earth rivers overlay (`web/public/rivers.json`) since the stock Protomaps tileset
+  genuinely has no river line data below z9 (verified by fetching real tiles) — initially
+  cut off right at the z9 handoff, then pulled back to z7 after Jesse reported visible
+  overlap with the tileset's own rivers for a few zoom levels (Natural Earth's generalized
+  centerlines don't trace the same path as the tileset's OSM-derived ones).
+- `MainMap.tsx`'s initial framing widened 10% (`WIDE_WIDTH_KM`/`WIDE_HEIGHT_KM`, which also
+  drives the max-zoom-out floor via `applyWideZoomFloor`), pan radius trimmed 10% to offset
+  it (`PAN_RADIUS_KM`) — deliberate: see more at a glance, less new ground to find by
+  panning past it.
+- Investigated (not a bug): whether city-list "randomness" was actually random. Confirmed
+  via 3,000-trial simulation against the real algorithm that city selection *within* a
+  chosen country is uniformly random (matches theoretical expectation almost exactly for
+  several specific cities Jesse named). Country-level representation scaling with
+  population/city-count is intentional and Jesse is fine with it.
+
+**New dev tool**: `tools/box-overlay.html` — draggable/resizable zoom+pan rectangles (real
+miles, same math as `MainMap.tsx`) over a live Mapbox satellite view, for visually comparing
+Guesswhere's framing against the reference game's. See "Layout" below.
+
+**Follow-up pass (2026-07-24): city-overlay.html-driven data quality review.** Jesse
+manually reviewed the city database using `tools/city-overlay.html` and reported ~30
+issues in three categories — a real name-matching bug, missing small towns, and
+metro-area/city-limits granularity (Denver absorbing suburbs, Nile/Kerala-coast towns
+merged under one name). Jesse confirmed the third category is fine as-is, out of scope.
+The first two were fixed:
+
+- **Sort-comparator bug fixed** (`etl/build.js`'s `resolveAgainstTiles`): candidate
+  ranking sorted by raw `mainScore` first, which scores against GHSL's name as ONE
+  string even when it's a compound/bracketed form like `"Minneapolis [Saint Paul]"`.
+  That let a coincidentally-similar-length wrong neighbor (`"North Saint Paul"`) outrank
+  the actual correct answer (`"Minneapolis"`, whose `listScore` — checked, but never
+  given tiebreak priority — was already a perfect 1.0). Fixed by sorting on
+  `Math.max(mainScore, listScore)` first. Confirmed fixed live against the raw GHSL
+  `.gpkg`: Minneapolis (was "North Saint Paul"), Colombo (was "Sri Jayewardenepura
+  Kotte"), Oaxaca City (was "Zimatlán de Álvarez"). Quarantine count dropped 422→392 as
+  a side effect (30 more cities now clear the name-match threshold).
+- **New GeoNames coverage layer** for real towns below GHSL's own Urban Centre threshold
+  — confirmed via direct query that GHSL's dataset simply never generates a row for
+  these (Missoula, Bozeman, Kalamata, Mâcon, Douliu, etc. — not a filter of ours).
+  Sourced from GeoNames `cities500.txt` (already loaded for aliasing), population
+  ≥30,000, resolved against the minimap tiles through the same `resolveAgainstTiles`
+  path as everything else — same answer-key invariant applies, quarantined the same way
+  on a failed match. Critical safeguard against double-counting: a candidate is skipped
+  if it falls within another already-accepted city's *physical* radius
+  (`sqrt(areaKm2/π)*1.3` — deliberately NOT the generous `radiusForArea` tile-search
+  floor, which floors at 25km and would wrongly swallow a real, distinct nearby city
+  like Perm into a tiny 7km² satellite village's shadow). Verified: Lakewood, CO (real
+  Denver suburb, pop 152k) correctly excluded; Lakewood, CA/WA correctly kept as
+  separate. Added a `pop_source` column (`'ghsl'`/`'geonames'`) for transparency;
+  `pop_ghsl` stays the one column every downstream consumer (`gameLogic.ts`,
+  `matching/grader.js`) filters on, so no other code changes were needed. Result:
+  11,422 → 19,765 total rows, 11,030 → 18,749 playable.
+- **Surprising find along the way: Perm, Russia (~1M people) had zero GHSL entry at
+  all** — not a name-matching miss, GHSL's own Urban Centre Database genuinely never
+  generated a polygon for it anywhere nearby (confirmed by scanning the raw `.gpkg`
+  across a multi-degree radius). Now covered via the GeoNames layer above (pop 982,419).
+- **Memory gotcha for anyone re-running `build.js`:** `TileLabelSource`'s `tileCache`
+  (`etl/tile-query.js`) never evicts. The GHSL pass alone already pushes it close to
+  Node's default heap ceiling; running the new GeoNames pass immediately after without
+  clearing it caused a real OOM crash. `build.js` now calls `tiles.tileCache.clear()`
+  between the two passes — if a third pass is ever added, clear it again, or bump
+  `--max-old-space-size`.
+- **Confirmed NOT bugs — upstream GHSL data, left as-is:** Fort Worth/North Richland
+  Hills (GHSL itself split that corridor into two oddly-named chunks with non-compound
+  names — no bracket/matching bug present), Luxor, and the Kerala-coast cluster
+  (Ponnani/Kochi/Kozhikode — GHSL's own contiguous-built-up clustering genuinely
+  absorbed several towns under one name, same category as Denver, which Jesse is fine
+  with).
+- **New candidates for the Coyah/Conakry-style manual review backlog below** (confirmed
+  NOT a matching bug — implausible raw GHSL population values for small-area polygons):
+  Sarvestan and Kharameh, Iran (~1M people packed into 16-24km², ~40-60x plausible urban
+  density) and Riwoto/Kapoeta, South Sudan. Foz do Iguaçu's crosscheck flag is a false
+  positive, not a bug — GHSL's own number (219k) is roughly correct for the real city;
+  `worldcities.csv`'s "98" is the bad value there.
+- Remember to re-run `etl/add-coastal-distance.js` after any `build.js` rebuild —
+  that column isn't part of `build.js`'s own output, and `tools/build-city-overlay.js`
+  (and the game's "Only Coast" filter) will error without it.
+
+### OPEN — needs a decision, found while investigating the above
+
+**Real data bug, not an algorithm bug: Conakry (Guinea's capital, ~2M people) is missing
+from `etl/cities.sqlite` entirely, and its population landed on a nearby "Coyah" record
+instead** (`pop_ghsl: 2,991,111` — Coyah's real population is nowhere near that). This is
+why Jesse kept getting Coyah and never Conakry: with Guinea's cities in the corpus, Coyah's
+inflated population makes it dominate at higher population-floor games, and Conakry simply
+isn't there to be picked at all. Confirmed independently: no city exists within 40km of
+Conakry's real coordinates other than this one Coyah point.
+
+The ETL pipeline's own cross-check caught this at build time — Coyah's `crosscheck_note` is
+`worldcities.csv "Forécariah" pop=23010 vs GHSL pop=2991111 (130.0x)` — but per
+`etl/build.js`'s explicit design (flag only, never auto-exclude, since `worldcities.csv`
+itself isn't authoritative and most large flags are false positives — Tokyo, NYC, Singapore,
+and Denver all carry 190x-240x flags and are all completely correct), it was never reviewed.
+
+**Also confirmed: the selection algorithm itself is fine.** Jesse proposed picking city #1
+from the full pool, eliminating its country, picking city #2 from what's left, etc. — this
+is mathematically identical to the current "shuffle once, scan for first-per-country"
+approach (a known property of random permutations), so it would not have fixed this. No
+code change needed there.
+
+**Next steps, not yet started:**
+1. Fix the Coyah/Conakry record specifically — add a correct Conakry entry, correct Coyah's
+   population back down to something real. Needs an actual population source for both;
+   don't guess.
+2. Optionally: spot-check the wider flagged list for other cases that look like *this*
+   pattern — a real city missing near a suspiciously inflated small one, or an
+   implausible raw population for a small polygon — rather than treating flag size
+   alone as a bug signal, since most large flags are legitimate (see above). Candidates
+   identified so far, still not corrected: Coyah/Conakry (Guinea), Sarvestan and
+   Kharameh (Iran, ~1M crammed into 16-24km²), Riwoto/Kapoeta (South Sudan). All
+   confirmed to be genuine upstream GHSL data issues, not matching-pipeline bugs — see
+   the 2026-07-24 follow-up pass above for how each was confirmed.
+
+**Open question, still not resolved: Jesse reported Railway showing a "crashed" deploy
+despite the site working.** The log excerpt he pasted was a completely clean, successful
+Next.js boot (no error, no exception) — nothing in it explains a "crashed" label. No
+`railway.json`/health check is configured in the repo. Waiting on him to say what
+specifically shows it as crashed (a dashboard badge? a restart count? an email?) and, if
+there's an earlier failed attempt in the same deploy's logs, to share that part
+specifically.
 
 **Verification scripts live in `web/scripts/`** — 80 checks across accounts, active-time
 accrual, leaderboards, prune safety, email tokens, and emailed-link origins. See
@@ -286,6 +384,24 @@ report-round exclusions (see below) — not bulk geodata. Don't gitignore it.
   (no alias column).
 - `tools/imagery-compare.html` — side-by-side Esri/Mapbox fidelity viewer. Uses raw tile
   endpoints, which is the *expensive* billing path; correct for testing, never for production.
+- `tools/box-overlay.html` — standalone dev tool (own Mapbox token prompt, not wired to
+  `.env.local`): two draggable/resizable rectangles (zoom = initial framing, pan = how far
+  you can wander) over a live satellite view, sized in real miles via the same math as
+  `MainMap.tsx`'s `boxAroundCenter`. Lock-together move, per-box aspect-ratio lock
+  (Photoshop-crop style), "scale zoom to X% of pan's area," and presets for Guesswhere's
+  current numbers vs. the reference game's — built for comparing framing/pan-range changes
+  visually before touching `MainMap.tsx`'s constants.
+- `tools/city-overlay.html` (generated by `tools/build-city-overlay.js` — re-run that after
+  any edit to `cities.sqlite`) — every city as a semi-transparent circle sized by
+  `pop_ghsl`, positioned at its real lat/lon, colored by data-quality flag (blue clean,
+  yellow/orange/red by crosscheck ratio, bright red quarantined), over a live
+  satellite+labels Mapbox view. Built to spot-check the crosscheck-flagged list visually
+  (real city missing near a suspiciously inflated small one, like Coyah/Conakry — see the
+  open item above) rather than just by ratio size. Filters (flagged/quarantined/min
+  ratio/min population) double as a sorted-by-ratio review queue with prev/next
+  fly-to-city buttons, plus a name search and one-click "open in Google Maps" links for
+  cross-referencing against ground truth. Same shared Mapbox-token localStorage key as
+  `box-overlay.html`.
 - `web/data/reported-cities.json` — Report Round blocklist. City ids only, no PII. Global
   across all games, persisted across restarts. Grows slowly; a flat file is intentional,
   not a placeholder for "add a real DB later."
