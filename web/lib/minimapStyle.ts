@@ -1,5 +1,6 @@
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { layersWithPartialCustomTheme } from 'protomaps-themes-base';
+import { api } from '@/lib/basePath';
 
 // Self-hosted vector tiles (PLAN.md core invariant: this IS the answer key --
 // see etl/). Served via the Protomaps Cloudflare Worker (cloudflare/pmtiles-worker/)
@@ -12,7 +13,9 @@ export const RIVERS_SOURCE_ID = 'ne-rivers';
 // Served from web/public/rivers.json -- Natural Earth's ne_50m_rivers_lake_centerlines,
 // trimmed to River features only, {min_zoom, geometry}. See buildRiverOverlayLayers()
 // below for why this exists at all.
-const RIVERS_URL = '/rivers.json';
+// basePath does not rewrite a plain string like this one, only <Link>/router
+// hrefs and /_next/* assets -- so the prefix is applied explicitly.
+const RIVERS_URL = api('/rivers.json');
 // The stock Protomaps tileset's own water_river LineString features simply
 // don't exist in the tile data below z9 (confirmed by fetching real tiles
 // along the Ob river and inspecting feature geometry types directly -- not a

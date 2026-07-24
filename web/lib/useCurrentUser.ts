@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { api } from '@/lib/basePath';
 
 export interface CurrentUser {
   id: string;
@@ -21,7 +22,7 @@ export function useCurrentUser() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch(api('/api/auth/me'));
       const data = await res.json();
       setUser(data.user);
       setEmailEnabled(Boolean(data.emailEnabled));

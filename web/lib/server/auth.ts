@@ -9,8 +9,20 @@ import {
   deleteSession,
   type UserRow,
 } from './gameDb';
+import { BASE_PATH } from '../basePath';
 
 export const SESSION_COOKIE = 'gw_session';
+
+// Scoped to Guesswhere's mount point rather than '/'. bingbongblitz.com serves
+// three other games from the same origin, and a '/'-scoped cookie would ride
+// along on every one of their requests. `cookies().set` does not apply
+// next.config's basePath on its own, so this is explicit.
+//
+// Whatever this is, `store.delete` must pass the SAME path -- the browser
+// matches cookies for deletion on name+domain+path, so deleting with the
+// default '/' would silently leave a '/guesswhere'-scoped session in place and
+// sign-out would appear to do nothing.
+const SESSION_COOKIE_PATH = BASE_PATH;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 // scrypt from node:crypto rather than bcrypt/argon2: those are native modules
@@ -135,7 +147,7 @@ export async function startSession(userId: string): Promise<void> {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: '/',
+    path: SESSION_COOKIE_PATH,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
 }
@@ -144,7 +156,7 @@ export async function endSession(): Promise<void> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) deleteSession(hashToken(token));
-  store.delete(SESSION_COOKIE);
+  store.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
 }
 
 /** The current signed-in user, or null. Safe to call from route handlers and

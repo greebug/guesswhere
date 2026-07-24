@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import AuthModal from './AuthModal';
 import { useCurrentUser } from '@/lib/useCurrentUser';
+import { api } from '@/lib/basePath';
 
 /** Sign-in state for the home page. Deliberately a modal rather than its own
  * route: starting a game should never require navigating away and back. */
@@ -12,7 +13,7 @@ export default function AuthMenu() {
   const [modal, setModal] = useState<'login' | 'signup' | null>(null);
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch(api('/api/auth/logout'), { method: 'POST' });
     refresh();
   }
 

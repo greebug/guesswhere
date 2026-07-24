@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { formatDuration } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 interface GameHeaderProps {
   gameId: string;
@@ -43,7 +44,7 @@ export default function GameHeader({
   async function shareCities() {
     setCopyState('working');
     try {
-      const res = await fetch(`/api/game/${gameId}/clone`, { method: 'POST' });
+      const res = await fetch(api(`/api/game/${gameId}/clone`), { method: 'POST' });
       if (!res.ok) throw new Error('failed to create share link');
       const data = await res.json();
       await navigator.clipboard.writeText(`${window.location.origin}/play/${data.gameId}`);

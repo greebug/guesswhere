@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { api } from '@/lib/basePath';
 
 function ResetInner() {
   const params = useSearchParams();
@@ -24,7 +25,7 @@ function ResetInner() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(api('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),

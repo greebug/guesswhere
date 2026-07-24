@@ -1,6 +1,7 @@
 // Exercises every branch of appUrl(). Run with:
 //   npx tsx appurl.test.mjs   (from web/)
 import { appUrl } from '../lib/appUrl.ts';
+import { BASE_PATH } from '../lib/basePath.ts';
 
 let failures = 0;
 const eq = (label, actual, expected) => {
@@ -22,10 +23,18 @@ eq('Railway domain trailing slash stripped', appUrl({ RAILWAY_PUBLIC_DOMAIN: 'g.
 
 eq('nothing set -> localhost', appUrl({}), 'http://localhost:3000');
 
-// The link shapes the emails actually build.
+// The link shapes the emails actually build. appUrl() resolves the ORIGIN only;
+// email.ts appends BASE_PATH because the app is mounted at a sub-path. Getting
+// that wrong means every emailed link 404s, so it is asserted here rather than
+// left to the reader.
 const base = appUrl({ RAILWAY_PUBLIC_DOMAIN: 'guesswhere-production.up.railway.app' });
-eq('verify link', `${base}/verify?token=abc`, 'https://guesswhere-production.up.railway.app/verify?token=abc');
-eq('reset link', `${base}/reset-password?token=abc`, 'https://guesswhere-production.up.railway.app/reset-password?token=abc');
+eq('appUrl returns origin only, no base path', base, 'https://guesswhere-production.up.railway.app');
+eq('verify link', `${base}${BASE_PATH}/verify?token=abc`, 'https://guesswhere-production.up.railway.app/guesswhere/verify?token=abc');
+eq('reset link', `${base}${BASE_PATH}/reset-password?token=abc`, 'https://guesswhere-production.up.railway.app/guesswhere/reset-password?token=abc');
+
+// A custom-domain deploy is the shape that actually ships.
+const prod = appUrl({ APP_URL: 'https://bingbongblitz.com' });
+eq('prod verify link', `${prod}${BASE_PATH}/verify?token=abc`, 'https://bingbongblitz.com/guesswhere/verify?token=abc');
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

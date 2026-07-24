@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BOARD_POPULATIONS, formatDuration, formatPopulation } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 interface Entry {
   id: string;
@@ -52,7 +53,7 @@ export default function Leaderboard() {
   // One request for all eight lists, so flipping tabs is instant rather than
   // a round-trip each time.
   useEffect(() => {
-    fetch('/api/leaderboard')
+    fetch(api('/api/leaderboard'))
       .then((r) => r.json())
       .then((d) => setBoards(d.boards))
       .catch(() => setBoards([]));

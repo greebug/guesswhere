@@ -7,6 +7,7 @@ import DuelHeader from '@/components/DuelHeader';
 import AnswerBox from '@/components/AnswerBox';
 import RoundResultOverlay from '@/components/RoundResultOverlay';
 import DuelReport, { type DuelReportRound } from '@/components/DuelReport';
+import { api } from '@/lib/basePath';
 
 interface DuelPlayer {
   id: string;
@@ -85,7 +86,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     let cancelled = false;
     async function poll() {
       try {
-        const res = await fetch(`/api/duel/${lobbyId}/state`);
+        const res = await fetch(api(`/api/duel/${lobbyId}/state`));
         if (cancelled) return;
         if (!res.ok) {
           if (res.status === 404) setNotFound(true);
@@ -151,7 +152,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   }, [state, displayedRoundSeq, displayedRound]);
 
   async function handleJoin(name: string) {
-    const res = await fetch(`/api/duel/${lobbyId}/join`, {
+    const res = await fetch(api(`/api/duel/${lobbyId}/join`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -165,7 +166,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   async function handleSettingsChange(settings: DuelSettings) {
     if (!playerId) return;
-    const res = await fetch(`/api/duel/${lobbyId}/settings`, {
+    const res = await fetch(api(`/api/duel/${lobbyId}/settings`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, ...settings }),
@@ -175,7 +176,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   async function handleStart() {
     if (!playerId) return;
-    const res = await fetch(`/api/duel/${lobbyId}/start`, {
+    const res = await fetch(api(`/api/duel/${lobbyId}/start`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),
@@ -185,7 +186,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   async function handleGuess(guess: string): Promise<{ correct: boolean; canonicalName: string | null }> {
     if (!playerId) return { correct: false, canonicalName: null };
-    const res = await fetch(`/api/duel/${lobbyId}/guess`, {
+    const res = await fetch(api(`/api/duel/${lobbyId}/guess`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, guess }),
@@ -197,7 +198,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   async function handleReport() {
     if (!playerId) return;
-    const res = await fetch(`/api/duel/${lobbyId}/report`, {
+    const res = await fetch(api(`/api/duel/${lobbyId}/report`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),

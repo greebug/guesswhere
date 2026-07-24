@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCurrentUser } from '@/lib/useCurrentUser';
+import { api } from '@/lib/basePath';
 
 export default function JoinDuel() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function JoinDuel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/duel/join-by-code', {
+      const res = await fetch(api('/api/duel/join-by-code'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim(), name: name.trim() }),

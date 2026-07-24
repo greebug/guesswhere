@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { buildMinimapStyle } from '@/lib/minimapStyle';
+import { api } from '@/lib/basePath';
 
 // Every round starts on the same neutral world view, unrelated to the
 // answer's location -- centering on (or near) the actual coordinate would
@@ -114,7 +115,7 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
       } else {
         try {
           const qs = lonLats.map((ll) => `point=${ll.lat.toFixed(3)},${ll.lng.toFixed(3)}`).join('&');
-          const res = await fetch(`/api/geo/country?${qs}`);
+          const res = await fetch(api(`/api/geo/country?${qs}`));
           if (!res.ok) return;
           const data = await res.json();
           names = data.countries as (string | null)[];

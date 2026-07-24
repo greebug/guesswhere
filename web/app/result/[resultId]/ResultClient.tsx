@@ -5,6 +5,7 @@ import Link from 'next/link';
 import ResultMap from '@/components/ResultMap';
 import RoundBreakdown, { type BreakdownRound } from '@/components/RoundBreakdown';
 import { formatDuration, formatPopulation } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 interface ResultView {
   id: string;
@@ -22,7 +23,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/result/${resultId}`)
+    fetch(api(`/api/result/${resultId}`))
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json()).error ?? 'result not found');
         return res.json();

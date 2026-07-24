@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCurrentUser } from '@/lib/useCurrentUser';
 import { formatThousands, parseDigits } from '@/lib/format';
 import { BOARD_POPULATIONS } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 function formatTimer(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -28,7 +29,7 @@ export default function NewDuel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/duel/new', {
+      const res = await fetch(api('/api/duel/new'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

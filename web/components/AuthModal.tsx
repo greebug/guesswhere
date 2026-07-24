@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { api } from '@/lib/basePath';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -34,7 +35,7 @@ export default function AuthModal({
 
     try {
       if (mode === 'forgot') {
-        const res = await fetch('/api/auth/forgot-password', {
+        const res = await fetch(api('/api/auth/forgot-password'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email }),
@@ -44,7 +45,7 @@ export default function AuthModal({
         return;
       }
 
-      const res = await fetch(`/api/auth/${mode}`, {
+      const res = await fetch(api(`/api/auth/${mode}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(

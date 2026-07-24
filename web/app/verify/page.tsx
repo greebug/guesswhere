@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { api } from '@/lib/basePath';
 
 function VerifyInner() {
   const params = useSearchParams();
@@ -16,7 +17,7 @@ function VerifyInner() {
       setMessage('This link is missing its token.');
       return;
     }
-    fetch(`/api/auth/verify?token=${encodeURIComponent(token)}`)
+    fetch(api(`/api/auth/verify?token=${encodeURIComponent(token)}`))
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Verification failed');

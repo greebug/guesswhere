@@ -18,4 +18,7 @@ bucket_name = "guesswhere-tiles"
 
 [vars]
 # The live app's origin, plus localhost for local dev against this Worker.
-ALLOWED_ORIGINS = "https://guesswhere-production.up.railway.app,http://localhost:3000"
+# Guesswhere now serves from bingbongblitz.com/guesswhere behind the hub Worker;
+# the Railway origin stays listed so the service is still usable directly while
+# the migration settles and old links redirect.
+ALLOWED_ORIGINS = "https://bingbongblitz.com,https://guesswhere-production.up.railway.app,http://localhost:3000"

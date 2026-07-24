@@ -6,6 +6,7 @@ import MiniMap from '@/components/MiniMap';
 import GameHeader from '@/components/GameHeader';
 import AnswerBox from '@/components/AnswerBox';
 import GameReport, { type GameSummary } from '@/components/GameReport';
+import { api } from '@/lib/basePath';
 
 interface RoundView {
   index: number;
@@ -48,13 +49,13 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   // runtime either way (the .then runs after the component body finishes) but
   // relying on that is a temporal-dead-zone trap waiting to bite.
   const loadSummary = useCallback(async () => {
-    const res = await fetch(`/api/game/${gameId}/summary`);
+    const res = await fetch(api(`/api/game/${gameId}/summary`));
     if (!res.ok) return;
     setSummary(await res.json());
   }, [gameId]);
 
   useEffect(() => {
-    fetch(`/api/game/${gameId}`)
+    fetch(api(`/api/game/${gameId}`))
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json()).error ?? 'game not found');
         return res.json();
@@ -81,7 +82,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const focus = useCallback(
     async (roundIndex: number) => {
       try {
-        const res = await fetch(`/api/game/${gameId}/focus`, {
+        const res = await fetch(api(`/api/game/${gameId}/focus`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roundIndex }),
@@ -113,7 +114,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   }, [summary]);
 
   async function handleGuess(guess: string) {
-    const res = await fetch(`/api/game/${gameId}/guess`, {
+    const res = await fetch(api(`/api/game/${gameId}/guess`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roundIndex: currentIndex, guess }),
@@ -133,7 +134,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   }
 
   async function handleReveal() {
-    const res = await fetch(`/api/game/${gameId}/reveal`, {
+    const res = await fetch(api(`/api/game/${gameId}/reveal`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roundIndex: currentIndex }),
@@ -153,7 +154,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     if (reportPending) return;
     setReportPending(true);
     try {
-      const res = await fetch(`/api/game/${gameId}/report`, {
+      const res = await fetch(api(`/api/game/${gameId}/report`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roundIndex: currentIndex }),

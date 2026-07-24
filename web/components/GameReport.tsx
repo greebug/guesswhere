@@ -5,6 +5,7 @@ import { useState } from 'react';
 import ResultMap from './ResultMap';
 import RoundBreakdown, { type BreakdownRound } from './RoundBreakdown';
 import { formatDuration } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 export interface ReportRound extends BreakdownRound {
   lat: number;
@@ -32,7 +33,7 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
   async function shareCities() {
     setCopyState('working');
     try {
-      const res = await fetch(`/api/game/${summary.gameId}/clone`, { method: 'POST' });
+      const res = await fetch(api(`/api/game/${summary.gameId}/clone`), { method: 'POST' });
       if (!res.ok) throw new Error('failed to create share link');
       const data = await res.json();
       await navigator.clipboard.writeText(`${window.location.origin}/play/${data.gameId}`);

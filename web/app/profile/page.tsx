@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatDuration, formatPopulation } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 interface RecentGame {
   id: string;
@@ -34,7 +35,7 @@ export default function ProfilePage() {
   const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/profile')
+    fetch(api('/api/profile'))
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json()).error ?? 'failed to load profile');
         return res.json();
@@ -45,7 +46,7 @@ export default function ProfilePage() {
 
   async function resendVerification() {
     setVerifyNotice(null);
-    const res = await fetch('/api/auth/request-verify', { method: 'POST' });
+    const res = await fetch(api('/api/auth/request-verify'), { method: 'POST' });
     const data = await res.json();
     setVerifyNotice(res.ok && data.ok ? 'Verification email sent.' : data.error ?? 'Could not send.');
   }

@@ -7,6 +7,7 @@ import AuthMenu from '@/components/AuthMenu';
 import Leaderboard from '@/components/Leaderboard';
 import { formatThousands, parseDigits } from '@/lib/format';
 import { BOARD_POPULATIONS } from '@/lib/boards';
+import { api } from '@/lib/basePath';
 
 export default function Home() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/game/new', {
+      const res = await fetch(api('/api/game/new'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetPopulation, onlyCoast }),

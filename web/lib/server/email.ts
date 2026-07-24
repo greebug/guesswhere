@@ -1,6 +1,7 @@
 import { insertEmailToken, deleteEmailTokens } from './gameDb';
 import { hashToken, newToken } from './auth';
 import { appUrl } from '../appUrl';
+import { BASE_PATH } from '../basePath';
 
 // Resend's REST API. Plain fetch, no npm dependency.
 //
@@ -97,7 +98,7 @@ export async function sendVerificationEmail(userId: string, email: string): Prom
     used_at: null,
   });
 
-  const url = `${appUrl()}/verify?token=${token}`;
+  const url = `${appUrl()}${BASE_PATH}/verify?token=${token}`;
   return send(
     email,
     'Verify your Guesswhere email',
@@ -126,7 +127,7 @@ export async function sendPasswordResetEmail(userId: string, email: string): Pro
     used_at: null,
   });
 
-  const url = `${appUrl()}/reset-password?token=${token}`;
+  const url = `${appUrl()}${BASE_PATH}/reset-password?token=${token}`;
   return send(
     email,
     'Reset your Guesswhere password',
