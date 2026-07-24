@@ -1,0 +1,470 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Box overlay: aspect-ratio / range demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #14161a; color: #e6e8ec; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  .bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    padding: 10px 12px; background: rgba(20, 22, 26, 0.92); border-bottom: 1px solid #3a4150;
+  }
+  .bar .group { display: flex; gap: 6px; align-items: center; }
+  .bar label { color: #9aa3b2; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .swatch.zoom { background: #5aa0ff; }
+  .swatch.pan { background: #ffb454; }
+  select, input, button {
+    font: inherit; background: #22262e; color: #e6e8ec; border: 1px solid #3a4150;
+    border-radius: 5px; padding: 5px 8px;
+  }
+  input[type="number"] { width: 68px; }
+  input#tok { width: 260px; }
+  input#areaPct { width: 52px; }
+  button { cursor: pointer; }
+  button:hover { background: #2a2f38; }
+  button.preset { font-size: 12px; color: #9aa3b2; }
+  button#lock { font-weight: 600; }
+  button#lock.locked { background: #2b3a4d; border-color: #5aa0ff; color: #cfe0ff; }
+  button#lock.unlocked { background: #3a2e1f; border-color: #ffb454; color: #ffe0bd; }
+  button.ratio-lock { font-size: 11px; padding: 5px 6px; }
+  button.ratio-lock.on { background: #2b3a4d; border-color: #8fb8e6; color: #cfe0ff; }
+  .sep { width: 1px; align-self: stretch; background: #3a4150; margin: 0 2px; }
+  #map { position: absolute; inset: 0; }
+  #token-gate {
+    position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+    background: #14161a; flex-direction: column; gap: 10px;
+  }
+  #token-gate.hidden { display: none; }
+  #token-gate p { color: #9aa3b2; max-width: 380px; text-align: center; margin: 0 0 4px; }
+
+  /* Box bodies -- draggable rectangles. Pan (outer) sits behind zoom (inner)
+     so a click inside the zoom box always grabs the zoom box, and a click in
+     the surrounding ring (pan box's own area, not covered by zoom) grabs the
+     pan box -- ordinary DOM stacking, no extra hit-test logic needed. */
+  .box-body { position: absolute; box-sizing: border-box; cursor: grab; }
+  .box-body.dragging { cursor: grabbing; }
+  .box-body .dims {
+    position: absolute; top: 4px; left: 6px; font-size: 11px;
+    font-variant-numeric: tabular-nums; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  }
+  #zoom-body { z-index: 11; background: rgba(90, 170, 255, 0.16); border: 1.5px solid #5aa0ff; }
+  #zoom-body.dragging { background: rgba(90, 170, 255, 0.26); }
+  #zoom-body .dims { color: #cfe0ff; bottom: 4px; top: auto; }
+  #pan-body { z-index: 10; background: rgba(255, 180, 84, 0.08); border: 1.5px dashed #ffb454; }
+  #pan-body.dragging { background: rgba(255, 180, 84, 0.16); }
+  #pan-body .dims { color: #ffe0bd; }
+
+  /* Resize handles */
+  .handle {
+    position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 3px;
+    border: 1.5px solid #0d1b2a;
+  }
+  .handle.zoom { z-index: 12; background: #5aa0ff; }
+  .handle.pan { z-index: 12; background: #ffb454; }
+  .handle.edge-h { cursor: ns-resize; }
+  .handle.edge-v { cursor: ew-resize; }
+  .handle.corner-nw, .handle.corner-se { cursor: nwse-resize; }
+  .handle.corner-ne, .handle.corner-sw { cursor: nesw-resize; }
+</style>
+</head>
+<body>
+
+<div id="token-gate">
+  <p><strong>Box overlay</strong> — two nested rectangles over the live satellite basemap, sized
+  in real miles: the <strong style="color:#cfe0ff">zoom box</strong> (initial framing) inside the
+  <strong style="color:#ffe0bd">pan box</strong> (how far you can wander). Same bounding-box math
+  as Guesswhere's own <code>MainMap.tsx</code>, so this is directly comparable to the game.</p>
+  <p>Paste a Mapbox token to start (kept only in this browser's local storage).</p>
+  <input type="text" id="tok" placeholder="pk.eyJ1...">
+  <button id="go">Load map</button>
+</div>
+
+<div class="bar" style="display: none" id="bar">
+  <button id="lock" class="locked">🔒 Locked together</button>
+  <div class="sep"></div>
+  <div class="group"><span class="swatch zoom"></span><label>zoom</label>
+    <input type="number" id="zw" min="0.1" step="0.01"><span style="color:#5a6272">×</span>
+    <input type="number" id="zh" min="0.1" step="0.01"><span style="color:#5a6272">mi</span>
+    <button class="ratio-lock" id="zratio" title="Lock aspect ratio for the zoom box">🔓</button>
+  </div>
+  <div class="group"><span class="swatch pan"></span><label>pan</label>
+    <input type="number" id="pw" min="0.1" step="0.01"><span style="color:#5a6272">×</span>
+    <input type="number" id="ph" min="0.1" step="0.01"><span style="color:#5a6272">mi</span>
+    <button class="ratio-lock" id="pratio" title="Lock aspect ratio for the pan box">🔓</button>
+  </div>
+  <button id="center-here">Center both on view</button>
+  <div class="sep"></div>
+  <div class="group">
+    <label>zoom =</label>
+    <input type="number" id="areaPct" min="0.1" max="100" step="0.1" value="50"><span style="color:#5a6272">%</span>
+    <button id="scale-area" title="Resize the zoom box (keeping its current shape) so its area is this % of the pan box's area">of pan area</button>
+  </div>
+  <div class="sep"></div>
+  <span style="color:#9aa3b2">presets:</span>
+  <button class="preset" data-zw="29.25" data-zh="12.44" data-pw="55.92" data-ph="55.92">Guesswhere</button>
+  <button class="preset" data-zw="25.66" data-zh="10.7" data-pw="98.5" data-ph="52.5">Reference game</button>
+</div>
+
+<div id="map"></div>
+<div id="pan-body" class="box-body"></div>
+<div id="zoom-body" class="box-body"></div>
+
+<script>
+// Same math as web/lib/geo.ts's boxAroundCenter, parameterized in miles so the
+// numbers on screen match what you'd type into MainMap.tsx directly.
+const KM_PER_MI = 1.609344;
+const KM_PER_DEG_LAT = 111.32;
+
+function widthMiToLonSpan(widthMi, atLat) {
+  return (widthMi * KM_PER_MI) / (KM_PER_DEG_LAT * Math.max(0.05, Math.cos(atLat * Math.PI / 180)));
+}
+function heightMiToLatSpan(heightMi) {
+  return (heightMi * KM_PER_MI) / KM_PER_DEG_LAT;
+}
+function boundsFromBox(box) {
+  const dLon = widthMiToLonSpan(box.widthMi, box.lat) / 2;
+  const dLat = heightMiToLatSpan(box.heightMi) / 2;
+  return { west: box.lon - dLon, east: box.lon + dLon, south: box.lat - dLat, north: box.lat + dLat };
+}
+// Inverse of the two helpers above -- recovers the mile width/height a given
+// lon/lat span represents, so numeric fields stay live during a drag.
+function widthMiFromLonSpan(lonSpan, atLat) {
+  return Math.abs(lonSpan) * KM_PER_DEG_LAT * Math.max(0.05, Math.cos(atLat * Math.PI / 180)) / KM_PER_MI;
+}
+function heightMiFromLatSpan(latSpan) {
+  return Math.abs(latSpan) * KM_PER_DEG_LAT / KM_PER_MI;
+}
+
+const tokKey = 'box-overlay-token';
+const stateKey = 'box-overlay-state-v3';
+const savedTok = localStorage.getItem(tokKey);
+if (savedTok) document.getElementById('tok').value = savedTok;
+
+document.getElementById('go').onclick = init;
+document.getElementById('tok').addEventListener('keydown', (e) => { if (e.key === 'Enter') init(); });
+if (savedTok) init();
+
+function init() {
+  const token = document.getElementById('tok').value.trim();
+  if (!token) return;
+  localStorage.setItem(tokKey, token);
+  mapboxgl.accessToken = token;
+
+  const saved = JSON.parse(localStorage.getItem(stateKey) || 'null');
+  const DEFAULT_CENTER = { lat: 35.6762, lon: 139.6503 }; // Tokyo
+  // aspectLocked/lockedRatio (width/height) travel on the box object itself --
+  // simplest place to keep per-box state that resize needs to read every drag.
+  const zoomBox = (saved && saved.zoomBox) || { ...DEFAULT_CENTER, widthMi: 29.25, heightMi: 12.44, aspectLocked: false, lockedRatio: null };
+  const panBox = (saved && saved.panBox) || { ...DEFAULT_CENTER, widthMi: 55.92, heightMi: 55.92, aspectLocked: false, lockedRatio: null };
+  let locked = saved ? saved.locked !== false : true;
+
+  document.getElementById('token-gate').classList.add('hidden');
+  document.getElementById('bar').style.display = 'flex';
+
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/satellite-v9',
+    center: [zoomBox.lon, zoomBox.lat],
+    zoom: 9,
+    dragRotate: false, // keep both boxes screen-axis-aligned -- no rotation math needed
+    attributionControl: true,
+  });
+  map.touchZoomRotate.disableRotation();
+
+  function persist() {
+    localStorage.setItem(stateKey, JSON.stringify({ zoomBox, panBox, locked }));
+  }
+
+  // Both boxes and all 16 handles sit as DOM siblings ON TOP of #map (not
+  // inside it), purely so drag/resize can hit-test them. That also means a
+  // wheel event over any of them never reaches Mapbox's own scroll-zoom
+  // listener, which is bound to #map's container specifically and doesn't
+  // see events outside its own subtree -- scrolling there silently did
+  // nothing. Forwarding the wheel event onto the map container fixes it:
+  // zoom now works no matter what's under the cursor, box or bare map alike.
+  function forwardWheelToMap(el) {
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      map.getCanvas().dispatchEvent(new WheelEvent('wheel', {
+        deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
+        clientX: e.clientX, clientY: e.clientY,
+        ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
+        bubbles: true, cancelable: true,
+      }));
+    }, { passive: false });
+  }
+
+  // ---- Build one box's DOM (body + 8 handles) ----
+  const HANDLE_DEFS = [
+    { cls: 'corner-nw', x: 0, y: 0 }, { cls: 'edge-h', x: 0.5, y: 0 }, { cls: 'corner-ne', x: 1, y: 0 },
+    { cls: 'edge-v', x: 0, y: 0.5 },                                   { cls: 'edge-v', x: 1, y: 0.5 },
+    { cls: 'corner-sw', x: 0, y: 1 }, { cls: 'edge-h', x: 0.5, y: 1 }, { cls: 'corner-se', x: 1, y: 1 },
+  ];
+  function buildBoxUI(name, box, bodyId) {
+    const bodyEl = document.getElementById(bodyId);
+    const dimsEl = document.createElement('div');
+    dimsEl.className = 'dims';
+    bodyEl.appendChild(dimsEl);
+    forwardWheelToMap(bodyEl);
+    const handles = HANDLE_DEFS.map((def) => {
+      const el = document.createElement('div');
+      el.className = 'handle ' + name + ' ' + def.cls + (def.x === 0.5 ? ' edge-h' : def.y === 0.5 ? ' edge-v' : '');
+      document.body.appendChild(el);
+      forwardWheelToMap(el);
+      return { el, def };
+    });
+    return { name, box, bodyEl, dimsEl, handles };
+  }
+  const zoomUI = buildBoxUI('zoom', zoomBox, 'zoom-body');
+  const panUI = buildBoxUI('pan', panBox, 'pan-body');
+
+  function layoutOne(ui) {
+    const b = boundsFromBox(ui.box);
+    const nw = map.project([b.west, b.north]);
+    const se = map.project([b.east, b.south]);
+    const left = Math.min(nw.x, se.x), right = Math.max(nw.x, se.x);
+    const top = Math.min(nw.y, se.y), bottom = Math.max(nw.y, se.y);
+
+    ui.bodyEl.style.left = left + 'px';
+    ui.bodyEl.style.top = top + 'px';
+    ui.bodyEl.style.width = (right - left) + 'px';
+    ui.bodyEl.style.height = (bottom - top) + 'px';
+    ui.dimsEl.textContent = ui.box.widthMi.toFixed(2) + ' × ' + ui.box.heightMi.toFixed(2) + ' mi';
+
+    ui.handles.forEach(({ el, def }) => {
+      el.style.left = (left + (right - left) * def.x) + 'px';
+      el.style.top = (top + (bottom - top) * def.y) + 'px';
+    });
+  }
+
+  const zwInput = document.getElementById('zw'), zhInput = document.getElementById('zh');
+  const pwInput = document.getElementById('pw'), phInput = document.getElementById('ph');
+  function syncInputs() {
+    if (document.activeElement !== zwInput) zwInput.value = zoomBox.widthMi.toFixed(2);
+    if (document.activeElement !== zhInput) zhInput.value = zoomBox.heightMi.toFixed(2);
+    if (document.activeElement !== pwInput) pwInput.value = panBox.widthMi.toFixed(2);
+    if (document.activeElement !== phInput) phInput.value = panBox.heightMi.toFixed(2);
+  }
+
+  function layoutAll() {
+    layoutOne(zoomUI);
+    layoutOne(panUI);
+    syncInputs();
+  }
+
+  map.on('move', layoutAll);
+  map.on('resize', layoutAll);
+  map.once('load', layoutAll);
+
+  // ---- Move: drag a box body to reposition it. Locked -> the other box
+  // moves by the same lat/lon delta, keeping their current offset fixed. ----
+  function wireMove(ui, otherUI) {
+    let drag = null;
+    ui.bodyEl.addEventListener('pointerdown', (e) => {
+      if (e.target !== ui.bodyEl && e.target !== ui.dimsEl) return; // handles take their own events
+      e.preventDefault();
+      ui.bodyEl.classList.add('dragging');
+      ui.bodyEl.setPointerCapture(e.pointerId);
+      drag = {
+        startClient: [e.clientX, e.clientY],
+        startThis: [ui.box.lon, ui.box.lat],
+        startOther: [otherUI.box.lon, otherUI.box.lat],
+      };
+    });
+    ui.bodyEl.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const startLL = map.unproject(drag.startClient);
+      const curLL = map.unproject([e.clientX, e.clientY]);
+      const dLon = curLL.lng - startLL.lng, dLat = curLL.lat - startLL.lat;
+      ui.box.lon = drag.startThis[0] + dLon;
+      ui.box.lat = drag.startThis[1] + dLat;
+      if (locked) {
+        otherUI.box.lon = drag.startOther[0] + dLon;
+        otherUI.box.lat = drag.startOther[1] + dLat;
+      }
+      layoutAll();
+    });
+    function end() {
+      if (!drag) return;
+      drag = null;
+      ui.bodyEl.classList.remove('dragging');
+      persist();
+    }
+    ui.bodyEl.addEventListener('pointerup', end);
+    ui.bodyEl.addEventListener('pointercancel', end);
+  }
+  wireMove(zoomUI, panUI);
+  wireMove(panUI, zoomUI);
+
+  // ---- Resize: drag a handle, opposite edge/corner stays anchored (or the
+  // box's own center, for an edge-midpoint handle -- see def.x/y === 0.5
+  // below). Always per-box independent -- resizing one never resizes the
+  // other. When the box's aspect ratio is locked, whichever dimension the
+  // handle doesn't directly control is derived from the locked ratio instead
+  // of being held fixed (edge handles) or read raw off the cursor (corners,
+  // where the dominant axis -- whichever changed more -- drives the other). ----
+  function wireResize(ui) {
+    let drag = null;
+    ui.handles.forEach(({ el, def }) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        el.setPointerCapture(e.pointerId);
+        const b = boundsFromBox(ui.box);
+        drag = {
+          def,
+          anchor: { lon: def.x === 0 ? b.east : def.x === 1 ? b.west : null, lat: def.y === 0 ? b.south : def.y === 1 ? b.north : null },
+        };
+      });
+      el.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const cur = map.unproject([e.clientX, e.clientY]);
+        const { anchor, def } = drag;
+        const box = ui.box;
+        const dragsWidth = def.x !== 0.5;
+        const dragsHeight = def.y !== 0.5;
+
+        let widthMi = box.widthMi, heightMi = box.heightMi;
+        if (dragsWidth) widthMi = widthMiFromLonSpan(cur.lng - anchor.lon, box.lat);
+        if (dragsHeight) heightMi = heightMiFromLatSpan(cur.lat - anchor.lat);
+
+        if (box.aspectLocked && box.lockedRatio) {
+          if (dragsWidth && dragsHeight) {
+            // Corner: follow whichever axis the drag changed more, derive the other.
+            const wScale = Math.abs(widthMi / box.widthMi - 1);
+            const hScale = Math.abs(heightMi / box.heightMi - 1);
+            if (wScale >= hScale) heightMi = widthMi / box.lockedRatio;
+            else widthMi = heightMi * box.lockedRatio;
+          } else if (dragsWidth) {
+            heightMi = widthMi / box.lockedRatio;
+          } else if (dragsHeight) {
+            widthMi = heightMi * box.lockedRatio;
+          }
+        }
+        widthMi = Math.max(0.1, widthMi);
+        heightMi = Math.max(0.1, heightMi);
+
+        // Rebuild west/east from the final width, keeping whichever side is
+        // this handle's natural anchor fixed (center, if this axis was only
+        // touched because aspect-lock pulled it along for the ride).
+        const lonSpan = widthMiToLonSpan(widthMi, box.lat);
+        let west, east;
+        if (def.x === 0) { east = anchor.lon; west = anchor.lon - lonSpan; }
+        else if (def.x === 1) { west = anchor.lon; east = anchor.lon + lonSpan; }
+        else { west = box.lon - lonSpan / 2; east = box.lon + lonSpan / 2; }
+
+        const latSpan = heightMiToLatSpan(heightMi);
+        let south, north;
+        if (def.y === 0) { north = anchor.lat; south = anchor.lat - latSpan; }
+        else if (def.y === 1) { south = anchor.lat; north = anchor.lat + latSpan; }
+        else { south = box.lat - latSpan / 2; north = box.lat + latSpan / 2; }
+
+        box.lon = (west + east) / 2;
+        box.lat = (south + north) / 2;
+        box.widthMi = widthMi;
+        box.heightMi = heightMi;
+        layoutAll();
+      });
+      function end() { if (drag) { drag = null; persist(); } }
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+    });
+  }
+  wireResize(zoomUI);
+  wireResize(panUI);
+
+  // ---- Lock-together toggle (move behavior) ----
+  const lockBtn = document.getElementById('lock');
+  function renderLock() {
+    lockBtn.textContent = locked ? '🔒 Locked together' : '🔓 Unlocked';
+    lockBtn.className = locked ? 'locked' : 'unlocked';
+  }
+  renderLock();
+  lockBtn.onclick = () => { locked = !locked; renderLock(); persist(); };
+
+  // ---- Per-box aspect-ratio lock (resize behavior), Photoshop-crop style ----
+  function wireRatioLock(box, btnId) {
+    const btn = document.getElementById(btnId);
+    function render() {
+      btn.textContent = box.aspectLocked ? '🔒' : '🔓';
+      btn.classList.toggle('on', box.aspectLocked);
+      btn.title = box.aspectLocked
+        ? 'Aspect ratio locked at ' + box.lockedRatio.toFixed(3) + ' -- click to unlock'
+        : 'Lock the current aspect ratio';
+    }
+    btn.onclick = () => {
+      box.aspectLocked = !box.aspectLocked;
+      if (box.aspectLocked) box.lockedRatio = box.widthMi / box.heightMi;
+      render();
+      persist();
+    };
+    render();
+    return render;
+  }
+  const renderZRatio = wireRatioLock(zoomBox, 'zratio');
+  const renderPRatio = wireRatioLock(panBox, 'pratio');
+
+  // ---- Live numeric inputs -- respect aspect lock too ----
+  function wireDimInput(input, box, dim, renderRatio) {
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      if (!(v > 0)) return;
+      box[dim] = v;
+      if (box.aspectLocked && box.lockedRatio) {
+        box.heightMi = dim === 'widthMi' ? Math.max(0.1, v / box.lockedRatio) : box.heightMi;
+        box.widthMi = dim === 'heightMi' ? Math.max(0.1, v * box.lockedRatio) : box.widthMi;
+      }
+      layoutAll();
+      persist();
+    });
+  }
+  wireDimInput(zwInput, zoomBox, 'widthMi');
+  wireDimInput(zhInput, zoomBox, 'heightMi');
+  wireDimInput(pwInput, panBox, 'widthMi');
+  wireDimInput(phInput, panBox, 'heightMi');
+
+  // ---- Center both boxes on current map view ----
+  document.getElementById('center-here').onclick = () => {
+    const c = map.getCenter();
+    zoomBox.lon = c.lng; zoomBox.lat = c.lat;
+    panBox.lon = c.lng; panBox.lat = c.lat;
+    layoutAll(); persist();
+  };
+
+  // ---- Scale zoom box to X% of the pan box's AREA, keeping zoom's current
+  // shape (width:height ratio) -- so it's an area comparison, not a linear
+  // "same shape as pan" resize. ----
+  document.getElementById('scale-area').onclick = () => {
+    const pct = parseFloat(document.getElementById('areaPct').value);
+    if (!(pct > 0)) return;
+    const targetArea = (pct / 100) * panBox.widthMi * panBox.heightMi;
+    const curArea = zoomBox.widthMi * zoomBox.heightMi;
+    const scale = Math.sqrt(targetArea / curArea);
+    zoomBox.widthMi = Math.max(0.1, zoomBox.widthMi * scale);
+    zoomBox.heightMi = Math.max(0.1, zoomBox.heightMi * scale);
+    if (zoomBox.aspectLocked) zoomBox.lockedRatio = zoomBox.widthMi / zoomBox.heightMi;
+    layoutAll(); persist();
+  };
+
+  // ---- Presets: set both boxes' dimensions, recenter zoom onto pan ----
+  document.querySelectorAll('button.preset').forEach((btn) => {
+    btn.onclick = () => {
+      zoomBox.widthMi = parseFloat(btn.dataset.zw);
+      zoomBox.heightMi = parseFloat(btn.dataset.zh);
+      panBox.widthMi = parseFloat(btn.dataset.pw);
+      panBox.heightMi = parseFloat(btn.dataset.ph);
+      zoomBox.lon = panBox.lon; zoomBox.lat = panBox.lat;
+      if (zoomBox.aspectLocked) { zoomBox.lockedRatio = zoomBox.widthMi / zoomBox.heightMi; renderZRatio(); }
+      if (panBox.aspectLocked) { panBox.lockedRatio = panBox.widthMi / panBox.heightMi; renderPRatio(); }
+      layoutAll(); persist();
+    };
+  });
+}
+</script>
+</body>
+</html>

@@ -14,6 +14,11 @@ web/out/
 web/.env.local
 web/.env*.local
 
+# Generated dev tool -- ~1.9MB, rebuilt wholesale from etl/cities.sqlite by the
+# committed tools/build-city-overlay.js. Regenerate with `node tools/build-city-overlay.js`
+# rather than carrying a new copy of it in history on every ETL rebuild.
+tools/city-overlay.html
+
 # Misc
 *.log
 .DS_Store
