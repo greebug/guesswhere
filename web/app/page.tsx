@@ -38,6 +38,16 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-8 bg-zinc-900 px-4 py-10 text-white">
+      {/* Plain <a>, not next/link: basePath rewrites <Link href="/"> to
+          "/guesswhere", which is this very page. Leaving the app entirely is
+          exactly what this button is for. */}
+      <a
+        href="/"
+        className="fixed left-4 top-4 z-50 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/20 hover:text-white"
+      >
+        &larr; All games
+      </a>
+
       <div className="flex w-full max-w-xl justify-end">
         <AuthMenu />
       </div>
