@@ -303,10 +303,15 @@
 }
 .gw-rise { animation: gw-rise 0.45s ease-out both; }
 
-/* Correct-answer acknowledgement: the border flashes, nothing pulses. */
+/* Correct-answer acknowledgement: the border flashes, nothing pulses.
+   Both keyframes must stay OPAQUE. An animated `background-color` replaces
+   the element's own `bg-gw-ground/95` for the whole run, so a keyframe of
+   `transparent` doesn't fade the tint away -- it makes the answer box itself
+   see-through to the satellite imagery behind it, for the full 0.7s, every
+   time you get one right. Fade teal-over-ground back to plain ground instead. */
 @keyframes gw-flash {
-  0% { background-color: rgb(79 185 165 / 0.3); }
-  100% { background-color: transparent; }
+  0% { background-color: color-mix(in srgb, var(--color-gw-verdigris) 30%, var(--color-gw-ground)); }
+  100% { background-color: var(--color-gw-ground); }
 }
 .gw-flash { animation: gw-flash 0.7s ease-out; }
 
