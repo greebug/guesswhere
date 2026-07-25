@@ -32,7 +32,7 @@ function VerifyInner() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
-      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">
+      <h1 className="gw-display text-3xl">
         {state === 'working' ? 'Verifying…' : state === 'ok' ? 'Email verified' : 'Link not valid'}
       </h1>
       {message && <p className="text-center text-gw-mute">{message}</p>}

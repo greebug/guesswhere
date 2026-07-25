@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import MainMap, { type MainMapHandle } from '@/components/MainMap';
 import MiniMap from '@/components/MiniMap';
 import DuelHeader from '@/components/DuelHeader';
@@ -209,14 +210,14 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   if (notFound) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-rose">No signal</p><p className="mt-2 text-gw-ink">Lobby not found.</p></div>
+        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-vermilion">No signal</p><p className="mt-2 text-gw-ink">Lobby not found.</p></div>
       </div>
     );
   }
   if (!state) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="gw-eyebrow gw-pulse-soft">Connecting</p>
+        <p className="gw-eyebrow gw-breathe">Connecting</p>
       </div>
     );
   }
@@ -243,8 +244,8 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     const remaining = state.countdownEndsAt ? Math.max(0, Math.ceil((state.countdownEndsAt - now) / 1000)) : 0;
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <p className="gw-eyebrow gw-pulse-soft text-base">Get ready</p>
-        <p className="gw-display gw-num text-[10rem] leading-none font-black">{remaining > 0 ? remaining : 'GO'}</p>
+        <p className="gw-eyebrow gw-breathe text-base">Get ready</p>
+        <p className="gw-num text-8xl">{remaining > 0 ? remaining : 'GO'}</p>
       </div>
     );
   }
@@ -337,7 +338,13 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Join Duel</h1>
+      <div className="w-full max-w-sm">
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
+          <span aria-hidden="true">←</span> Guesswhere
+        </Link>
+      </div>
+
+      <h1 className="gw-display text-3xl">Join a duel</h1>
       <input
         type="text"
         value={name}
@@ -355,7 +362,7 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
       >
         {loading ? 'Joining...' : 'Ready'}
       </button>
-      {error && <p className="rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-4 py-2 text-sm text-gw-rose">{error}</p>}
+      {error && <p className="rounded-lg border border-gw-vermilion/30 bg-gw-vermilion/10 px-4 py-2 text-sm text-gw-vermilion">{error}</p>}
     </div>
   );
 }
@@ -402,7 +409,13 @@ function LobbyScreen({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
-      <h1 className="gw-display text-5xl font-black tracking-[0.12em]">Duel Lobby</h1>
+      <div className="w-full max-w-sm">
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
+          <span aria-hidden="true">←</span> Guesswhere
+        </Link>
+      </div>
+
+      <h1 className="gw-display text-4xl">Duel lobby</h1>
 
       <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-gw-mute">
@@ -411,7 +424,7 @@ function LobbyScreen({
         <button
           onClick={copyCode}
           title="Click to copy"
-          className="gw-input gw-num px-8 py-4 text-5xl font-black tracking-[0.35em] text-gw-teal transition hover:border-gw-teal/60"
+          className="gw-input gw-num px-8 py-4 text-4xl tracking-[0.3em] text-gw-verdigris transition hover:border-gw-verdigris/60"
         >
           {copied ? 'Copied!' : state.joinCode}
         </button>

@@ -44,7 +44,7 @@ function ResetInner() {
   if (done) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
-        <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Password changed</h1>
+        <h1 className="gw-display text-3xl">Password changed</h1>
         <p className="text-center text-gw-mute">
           You’ve been signed out everywhere. Sign in with your new password.
         </p>
@@ -60,7 +60,7 @@ function ResetInner() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
-      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Choose a new password</h1>
+      <h1 className="gw-display text-3xl">Choose a new password</h1>
 
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
         <input
@@ -89,8 +89,8 @@ function ResetInner() {
         </button>
       </form>
 
-      {!token && <p className="text-sm text-gw-rose">This link is missing its token.</p>}
-      {error && <p className="text-sm text-gw-rose">{error}</p>}
+      {!token && <p className="text-sm text-gw-vermilion">This link is missing its token.</p>}
+      {error && <p className="text-sm text-gw-vermilion">{error}</p>}
     </div>
   );
 }

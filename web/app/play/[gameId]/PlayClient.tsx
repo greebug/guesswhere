@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import MainMap, { type MainMapHandle } from '@/components/MainMap';
-import OrbitMark from '@/components/OrbitMark';
+import GlobeMark from '@/components/GlobeMark';
 import MiniMap from '@/components/MiniMap';
 import GameHeader from '@/components/GameHeader';
 import AnswerBox from '@/components/AnswerBox';
@@ -211,7 +211,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="gw-panel max-w-sm p-6 text-center">
-          <p className="gw-eyebrow text-gw-rose">Signal lost</p>
+          <p className="gw-eyebrow text-gw-vermilion">Signal lost</p>
           <p className="mt-2 text-gw-ink">{error}</p>
           <Link href="/" className="gw-btn mt-5 px-4 py-2 text-sm">
             Back to Home
@@ -223,8 +223,8 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   if (!game) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <OrbitMark size={96} />
-        <p className="gw-eyebrow gw-pulse-soft">Acquiring imagery</p>
+        <GlobeMark size={72} />
+        <p className="gw-eyebrow gw-breathe">Acquiring imagery</p>
       </div>
     );
   }

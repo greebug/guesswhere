@@ -87,12 +87,7 @@ export default function DuelHeader({
   const hasReported = !!selfPlayerId && reportedBy.includes(selfPlayerId);
 
   return (
-    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-white/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink backdrop-blur-xl">
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-gw-violet/50 to-transparent"
-      />
-
+    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-gw-ink/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink">
       <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
         Home
       </Link>
@@ -115,7 +110,7 @@ export default function DuelHeader({
             <span className="gw-eyebrow text-[9px]">Remaining</span>
             <span
               className={`gw-num rounded px-1 text-lg font-bold ${
-                critical ? 'animate-timer-critical bg-gw-rose text-white' : 'text-gw-ink'
+                critical ? 'animate-timer-critical bg-gw-vermilion text-white' : 'text-gw-ink'
               }`}
               style={critical ? undefined : { textShadow: '0 0 18px rgb(76 201 255 / 0.6)' }}
             >
@@ -129,7 +124,7 @@ export default function DuelHeader({
         <button
           onClick={onRecenter}
           title="Snap back to the pinpointed view of this round's city"
-          className="gw-btn gw-tone-cyan px-3 py-1.5 text-sm"
+          className="gw-btn gw-tone-indigo px-3 py-1.5 text-sm"
         >
           🎯 Recenter
         </button>
@@ -137,7 +132,7 @@ export default function DuelHeader({
           onClick={onReport}
           disabled={hasReported || reportDisabled}
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round once every player has reported it, and excludes the city from all future games"
-          className="gw-btn gw-tone-rose px-3 py-1.5 text-sm"
+          className="gw-btn gw-tone-vermilion px-3 py-1.5 text-sm"
         >
           {hasReported ? `🚩 Reported (${reportedBy.length}/${totalPlayers})` : '🚩 Report Round'}
         </button>

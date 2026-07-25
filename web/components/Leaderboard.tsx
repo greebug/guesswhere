@@ -37,7 +37,7 @@ function BoardColumn({ title, accent, entries }: { title: string; accent: string
             <li key={e.id}>
               <Link
                 href={`/result/${e.id}`}
-                className="group flex items-baseline gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.06]"
+                className="group flex items-baseline gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-gw-ink/[0.05]"
               >
                 <span
                   className="gw-num w-4 text-center text-xs font-bold"
@@ -48,7 +48,7 @@ function BoardColumn({ title, accent, entries }: { title: string; accent: string
                 <span className="flex-1 truncate text-sm text-gw-ink/90 group-hover:text-gw-ink">
                   {e.username}
                 </span>
-                <span className="gw-num text-sm font-semibold text-gw-teal">
+                <span className="gw-num text-sm font-semibold text-gw-verdigris">
                   {formatDuration(e.total_ms)}
                 </span>
               </Link>
@@ -79,7 +79,7 @@ export default function Leaderboard() {
   return (
     <div className="gw-panel w-full p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight text-gw-ink">Fastest Times</h2>
+        <h2 className="gw-display text-lg text-gw-ink">Fastest Times</h2>
         <span className="gw-eyebrow">Top 5</span>
       </div>
 
@@ -103,7 +103,7 @@ export default function Leaderboard() {
       ) : (
         <div className="flex gap-5">
           <BoardColumn title="All cities" accent="#4cc9ff" entries={regular?.entries ?? []} />
-          <span className="w-px self-stretch bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+          <span className="w-px self-stretch bg-gradient-to-b from-transparent via-gw-ink/10 to-transparent" />
           <BoardColumn title="Coast only" accent="#2ee6c5" entries={coast?.entries ?? []} />
         </div>
       )}

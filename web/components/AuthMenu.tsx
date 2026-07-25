@@ -28,13 +28,13 @@ export default function AuthMenu() {
           <>
             <Link
               href="/profile"
-              className="gw-btn gw-tone-teal group px-3 py-1.5"
+              className="gw-btn gw-tone-verdigris group px-3 py-1.5"
               title="Your profile and past runs"
             >
               {/* A live status dot rather than the words "signed in as" --
                   shorter, and it reads as a connection indicator, which fits
                   the rest of the console. */}
-              <span className="h-1.5 w-1.5 rounded-full bg-gw-teal gw-pulse-soft" />
+              <span className="h-1.5 w-1.5 rounded-full bg-gw-verdigris gw-breathe" />
               <span className="font-semibold">{user.username}</span>
             </Link>
             <button onClick={logout} className="gw-btn px-3 py-1.5 text-gw-mute hover:text-gw-ink">
@@ -49,7 +49,7 @@ export default function AuthMenu() {
             </button>
             <button
               onClick={() => setModal('signup')}
-              className="gw-btn gw-tone-teal px-3 py-1.5"
+              className="gw-btn gw-tone-verdigris px-3 py-1.5"
             >
               Create account
             </button>

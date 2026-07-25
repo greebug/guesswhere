@@ -29,11 +29,11 @@ export default function RoundBreakdown({ rounds }: { rounds: BreakdownRound[] })
           const share = slowest > 0 ? (r.ms / slowest) * 100 : 0;
           const isSlowest = r.ms === slowest && slowest > 0;
           return (
-            <tr key={r.index} className="border-b border-white/[0.06] last:border-0">
+            <tr key={r.index} className="border-b border-gw-ink/[0.07] last:border-0">
               <td className="w-6 py-2 pr-2">
                 <span
                   className={`gw-num block text-center text-[11px] font-bold ${
-                    r.revealed ? 'text-gw-amber' : 'text-gw-faint'
+                    r.revealed ? 'text-gw-ochre' : 'text-gw-faint'
                   }`}
                 >
                   {r.index + 1}
@@ -50,10 +50,10 @@ export default function RoundBreakdown({ rounds }: { rounds: BreakdownRound[] })
                       : 'linear-gradient(90deg, rgb(46 230 197 / 0.18), transparent)',
                   }}
                 />
-                <span className={r.revealed ? 'text-gw-amber' : 'text-gw-ink'}>{r.name}</span>
+                <span className={r.revealed ? 'text-gw-ochre' : 'text-gw-ink'}>{r.name}</span>
                 {r.country && <span className="text-gw-faint">, {r.country}</span>}
                 {r.revealed && (
-                  <span className="ml-2 rounded border border-gw-amber/30 px-1 text-[9px] font-semibold tracking-wide text-gw-amber uppercase">
+                  <span className="ml-2 rounded border border-gw-ochre/30 px-1 text-[9px] font-semibold tracking-wide text-gw-ochre uppercase">
                     revealed
                   </span>
                 )}

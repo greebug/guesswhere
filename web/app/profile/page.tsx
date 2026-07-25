@@ -23,7 +23,7 @@ interface ProfileView {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="gw-panel flex-1 px-3 py-3 text-center">
-      <div className="gw-num text-xl font-bold text-gw-teal">{value}</div>
+      <div className="gw-num text-xl font-bold text-gw-verdigris">{value}</div>
       <div className="mt-0.5 text-xs text-gw-faint">{label}</div>
     </div>
   );
@@ -54,7 +54,7 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 ">
-        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-rose">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
+        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-vermilion">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           Back to Guesswhere
         </Link>
@@ -64,7 +64,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="flex min-h-screen items-center justify-center ">
-        <p className="gw-eyebrow gw-pulse-soft">Loading</p>
+        <p className="gw-eyebrow gw-breathe">Loading</p>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">{user.username}</h1>
+      <h1 className="gw-display text-3xl">{user.username}</h1>
 
       {user.email && !user.emailVerified && (
         <div className="w-full max-w-xl rounded-lg border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
@@ -112,12 +112,12 @@ export default function ProfilePage() {
         ) : (
           <ul className="flex flex-col">
             {recent.map((g) => (
-              <li key={g.id} className="border-b border-white/[0.06] last:border-0">
+              <li key={g.id} className="border-b border-gw-ink/[0.07] last:border-0">
                 <Link
                   href={`/result/${g.id}`}
-                  className="flex items-baseline gap-3 rounded px-2 py-2 text-sm hover:bg-white/5"
+                  className="flex items-baseline gap-3 rounded px-2 py-2 text-sm hover:bg-gw-ink/5"
                 >
-                  <span className="gw-num font-medium text-gw-teal">
+                  <span className="gw-num font-medium text-gw-verdigris">
                     {formatDuration(g.totalMs)}
                   </span>
                   <span className="flex-1 text-gw-mute">

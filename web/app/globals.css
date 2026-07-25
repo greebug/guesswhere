@@ -1,47 +1,56 @@
 @import "tailwindcss";
 
 /* ===========================================================================
-   Guesswhere's visual language: ORBITAL TELEMETRY.
+   Guesswhere's visual language: NIGHT ATLAS.
    ---------------------------------------------------------------------------
-   The game is "read the Earth from orbit," so the chrome is the instrument
-   panel you'd read it through: deep-space navy, luminous hairlines, glass,
-   and numbers in mono. It is deliberately NOT neutral grey -- the satellite
-   imagery itself is the only photographic thing on screen and everything
-   around it should read as an overlay on top of the world, not a webpage
-   containing one.
+   The reference point is a printed atlas read under a lamp, not a spacecraft
+   HUD. Warm paper-colored ink on a cold dark ground, printed-ink accents
+   (verdigris, ochre, vermilion) rather than neon, and a serif with some
+   personality doing the talking.
 
-   The accent palette is not arbitrary. The game already assigns meaning to
-   these three colors and this just extends it everywhere:
-     teal  -> found / correct / go        (matches the map's eliminated tint)
-     amber -> revealed / gave up / warn   (matches the reveal tint)
-     rose  -> report / destructive / stop
-   Anything that isn't one of those three states stays monochrome, which is
-   what keeps three saturated accents from turning into a fruit salad.
+   This replaced a first pass that went full sci-fi console. It looked
+   generic in a very specific way -- glassmorphism, saturated gradient
+   buttons, glows on everything, every element wrapped in its own card. Those
+   are the house style of every AI-generated dark UI, and the fix is not to
+   tune them but to remove them:
+
+     * surfaces are FLAT and opaque. no backdrop-blur, no white-tinted glass.
+     * borders and spacing carry structure. glow is used nowhere for hierarchy
+       and only barely for the map's own state colors.
+     * buttons are solid ink. no gradient fills, no animated sheen.
+     * a card must earn itself. related controls sit on the page separated by
+       rules and space, not nested two boxes deep.
+
+   The accent palette is still meaning-driven, and still matches the map:
+     verdigris -> found / correct / go
+     ochre     -> revealed / gave up / warn
+     vermilion -> report / destructive / stop
+   Everything else is ink and paper.
    =========================================================================== */
 
 @theme {
-  /* Backdrop, darkest to lightest. Navy rather than neutral black: pure
-     #000 next to satellite imagery reads as a hole in the page, a hint of
-     blue reads as sky. */
-  --color-gw-void: #03060e;
-  --color-gw-abyss: #070d1a;
-  --color-gw-deep: #0c1526;
-  --color-gw-panel: #111c30;
+  /* Ground: cold and dark, but tinted -- never pure black or neutral grey. */
+  --color-gw-ground: #0e141a;
+  --color-gw-surface: #151d25;
+  --color-gw-raised: #1c262f;
 
-  /* Ink */
-  --color-gw-ink: #e9f1ff;
-  --color-gw-mute: #8fa3c4;
-  --color-gw-faint: #55678a;
+  /* Ink: warm off-white, the single biggest reason this doesn't read as a
+     stock dark theme. Cold blue-white text on a cold ground is the default
+     everything ships with. */
+  --color-gw-ink: #f0eade;
+  --color-gw-mute: #9ba7b2;
+  --color-gw-faint: #64717d;
 
-  /* Accents */
-  --color-gw-teal: #2ee6c5;
-  --color-gw-teal-deep: #0d9e8a;
-  --color-gw-cyan: #4cc9ff;
-  --color-gw-amber: #ffb340;
-  --color-gw-rose: #ff5f7e;
-  --color-gw-violet: #9d7bff;
+  /* Printed-ink accents. Desaturated on purpose: these sit next to real
+     satellite photography and neon loses to it every time. */
+  --color-gw-verdigris: #4fb9a5;
+  --color-gw-ochre: #d9a441;
+  --color-gw-vermilion: #d9616e;
+  --color-gw-indigo: #7d8fd4;
 
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-archivo);
+  --font-mono: var(--font-plex-mono);
 }
 
 /* Everything below is wrapped in a cascade layer ON PURPOSE, and it has to
@@ -54,278 +63,215 @@
    came out white, and only a computed-style dump explained why. If a utility
    ever stops taking effect next to a `gw-` class, this is the reason. */
 @layer base {
-  :root {
-    --background: var(--color-gw-void);
-    --foreground: var(--color-gw-ink);
-    /* Reused by half a dozen glass surfaces; changing the recipe in one place
-       keeps them from drifting apart. */
-    --gw-glass: linear-gradient(160deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.02) 45%, rgb(255 255 255 / 0.04));
-    --gw-edge: rgb(255 255 255 / 0.1);
-    --gw-edge-lit: rgb(46 230 197 / 0.35);
-  }
-  
   body {
-    background: var(--color-gw-void);
+    background: var(--color-gw-ground);
     color: var(--color-gw-ink);
-    font-family: var(--font-geist-sans), system-ui, sans-serif;
-    /* The animated backdrop is fixed and full-bleed; without this, a short page
-       shows the raw body color in the overscroll gutter. */
-    background-attachment: fixed;
+    font-family: var(--font-archivo), system-ui, sans-serif;
   }
-  
+
   ::selection {
-    background: rgb(46 230 197 / 0.3);
-    color: #fff;
+    background: rgb(79 185 165 / 0.28);
+    color: var(--color-gw-ink);
   }
-  
+
   /* MapLibre popups (ResultMap's per-city markers on the finish screens) have
      a white background but set no text color of their own, so they otherwise
-     inherit the dark theme's white body text -- unreadable white-on-white. */
+     inherit the dark theme's light body text -- unreadable white-on-white. */
   .maplibregl-popup-content {
-    color: #0c1526;
-    border-radius: 8px;
-    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    color: #151d25;
+    border-radius: 4px;
+    font-family: var(--font-archivo), system-ui, sans-serif;
   }
 }
 
 @layer components {
-  /* ---------------------------------------------------------------------------
-     Surfaces
-     --------------------------------------------------------------------------- */
-  
-  /* The workhorse card. The inset top highlight is what sells "pane of glass"
-     rather than "grey box" -- it reads as light catching the top edge. */
+  /* -------------------------------------------------------------- surfaces */
+
+  /* Flat, opaque, one hairline border. No blur, no inner highlight, no drop
+     shadow -- on a dark ground a shadow is invisible anyway and only ever
+     added to make a box look "elevated" in a way nothing physical would. */
   .gw-panel {
-    position: relative;
-    border: 1px solid var(--gw-edge);
-    border-radius: 16px;
-    background:
-      var(--gw-glass),
-      linear-gradient(180deg, rgb(12 21 38 / 0.85), rgb(7 13 26 / 0.9));
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.08),
-      0 24px 48px -24px rgb(0 0 0 / 0.9);
-    backdrop-filter: blur(12px);
+    border: 1px solid rgb(240 234 222 / 0.1);
+    border-radius: 6px;
+    background: var(--color-gw-surface);
   }
-  
-  /* Same pane, lit from within by an accent. Set --gw-tone to the accent rgb. */
+
+  /* A panel that's carrying state (found / revealed / a winner). Colored
+     border and a barely-there wash -- no glow. */
   .gw-panel-lit {
-    border-color: rgb(var(--gw-tone) / 0.3);
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.08),
-      0 0 0 1px rgb(var(--gw-tone) / 0.06),
-      0 0 40px -12px rgb(var(--gw-tone) / 0.45),
-      0 24px 48px -24px rgb(0 0 0 / 0.9);
+    border-color: rgb(var(--gw-tone) / 0.45);
+    background:
+      linear-gradient(rgb(var(--gw-tone) / 0.05), rgb(var(--gw-tone) / 0.05)),
+      var(--color-gw-surface);
   }
-  
-  /* A hairline that fades out at both ends instead of stopping dead -- the
-     single cheapest trick for making a dark UI look engineered. */
+
   .gw-rule {
     height: 1px;
     border: 0;
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.16), transparent);
+    background: rgb(240 234 222 / 0.1);
   }
-  
-  /* ---------------------------------------------------------------------------
-     Type
-     --------------------------------------------------------------------------- */
-  
+
+  /* ------------------------------------------------------------------ type */
+
   .gw-eyebrow {
+    font-family: var(--font-archivo), system-ui, sans-serif;
     font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-gw-faint);
   }
-  
-  /* Every number that can change while you watch it: timers, scores, counts,
-     coordinates. Mono + tabular so digits don't jitter as they tick. */
+
+  /* Every number that can change while you watch it: timers, scores, counts.
+     Mono + tabular so digits don't jitter as they tick. */
   .gw-num {
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
   }
-  
+
+  /* The serif does the talking. Optical sizing and Fraunces' `wonk` axis are
+     both on -- that slight irregularity is the whole point of picking a face
+     with an opinion instead of another grotesque. */
   .gw-display {
-    background: linear-gradient(180deg, #ffffff 10%, #a9d8ff 55%, var(--color-gw-teal) 130%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 60px rgb(46 230 197 / 0.25);
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-variation-settings: 'SOFT' 20, 'WONK' 1;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--color-gw-ink);
   }
-  
-  /* ---------------------------------------------------------------------------
-     Controls
-     --------------------------------------------------------------------------- */
-  
+
+  /* --------------------------------------------------------------- controls */
+
   .gw-btn {
-    --gw-tone: 255 255 255;
-    position: relative;
+    --gw-tone: 240 234 222;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    border: 1px solid rgb(var(--gw-tone) / 0.25);
-    border-radius: 10px;
-    background: rgb(var(--gw-tone) / 0.08);
-    color: rgb(var(--gw-tone));
+    gap: 0.4rem;
+    border: 1px solid rgb(var(--gw-tone) / 0.22);
+    border-radius: 5px;
+    background: transparent;
+    color: rgb(var(--gw-tone) / 0.85);
     font-weight: 500;
-    transition: background-color 0.18s, border-color 0.18s, transform 0.12s, box-shadow 0.18s;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .gw-btn:hover:not(:disabled) {
-    background: rgb(var(--gw-tone) / 0.16);
+    background: rgb(var(--gw-tone) / 0.1);
     border-color: rgb(var(--gw-tone) / 0.45);
-    box-shadow: 0 0 24px -8px rgb(var(--gw-tone) / 0.7);
-  }
-  .gw-btn:active:not(:disabled) {
-    transform: translateY(1px);
+    color: rgb(var(--gw-tone));
   }
   .gw-btn:disabled {
-    opacity: 0.3;
+    opacity: 0.35;
     cursor: not-allowed;
   }
-  
-  /* Tone presets, so a button's meaning is one class rather than six. */
-  .gw-tone-teal { --gw-tone: 46 230 197; }
-  .gw-tone-amber { --gw-tone: 255 179 64; }
-  .gw-tone-rose { --gw-tone: 255 95 126; }
-  .gw-tone-cyan { --gw-tone: 76 201 255; }
-  .gw-tone-violet { --gw-tone: 157 123 255; }
-  
-  /* The one big commit-to-it button per screen. */
+
+  .gw-tone-verdigris { --gw-tone: 79 185 165; }
+  .gw-tone-ochre { --gw-tone: 217 164 65; }
+  .gw-tone-vermilion { --gw-tone: 217 97 110; }
+  .gw-tone-indigo { --gw-tone: 125 143 212; }
+
+  /* Solid ink, no gradient, no sheen. It reads as the primary action because
+     it is the only filled thing on the screen, which is a stronger signal
+     than any amount of glow. */
   .gw-cta {
-    position: relative;
-    overflow: hidden;
-    border-radius: 999px;
-    background: linear-gradient(135deg, var(--color-gw-teal), #16b4d8 55%, var(--color-gw-cyan));
-    color: #03181c;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    box-shadow:
-      0 0 0 1px rgb(46 230 197 / 0.4),
-      0 10px 40px -10px rgb(46 230 197 / 0.65),
-      inset 0 1px 0 rgb(255 255 255 / 0.45);
-    transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
+    border: 0;
+    border-radius: 5px;
+    background: var(--color-gw-verdigris);
+    color: #0b1512;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    transition: background-color 0.15s ease, transform 0.1s ease;
   }
-  .gw-cta:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.08);
-    box-shadow:
-      0 0 0 1px rgb(46 230 197 / 0.6),
-      0 16px 52px -10px rgb(46 230 197 / 0.8),
-      inset 0 1px 0 rgb(255 255 255 / 0.5);
-  }
+  .gw-cta:hover:not(:disabled) { background: #5fcbb6; }
   .gw-cta:active:not(:disabled) { transform: translateY(1px); }
-  .gw-cta:disabled { opacity: 0.4; filter: saturate(0.4); cursor: not-allowed; }
-  
-  /* Light sweeping across the CTA, once every few seconds. Subtle enough to
-     read as a highlight rather than a loading bar. */
-  .gw-cta::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.55) 50%, transparent 65%);
-    transform: translateX(-120%);
-    animation: gw-sheen 4.5s ease-in-out infinite;
-  }
-  .gw-cta:disabled::after { animation: none; }
-  
+  .gw-cta:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .gw-input {
-    border: 1px solid rgb(255 255 255 / 0.12);
-    border-radius: 10px;
-    background: rgb(3 6 14 / 0.6);
+    border: 1px solid rgb(240 234 222 / 0.14);
+    border-radius: 5px;
+    background: var(--color-gw-ground);
     color: var(--color-gw-ink);
-    transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+    transition: border-color 0.15s ease;
   }
   .gw-input::placeholder { color: var(--color-gw-faint); }
   .gw-input:focus {
     outline: none;
-    border-color: rgb(46 230 197 / 0.6);
-    background: rgb(3 6 14 / 0.8);
-    box-shadow: 0 0 0 3px rgb(46 230 197 / 0.14), 0 0 28px -10px rgb(46 230 197 / 0.8);
+    border-color: rgb(79 185 165 / 0.7);
   }
-  
+
   /* Small selectable pill (population presets, leaderboard tabs). */
   .gw-chip {
-    border: 1px solid rgb(255 255 255 / 0.1);
-    border-radius: 999px;
-    background: rgb(255 255 255 / 0.04);
+    border: 1px solid rgb(240 234 222 / 0.12);
+    border-radius: 4px;
+    background: transparent;
     color: var(--color-gw-mute);
-    transition: all 0.16s;
+    transition: all 0.15s ease;
   }
-  .gw-chip:hover { background: rgb(255 255 255 / 0.09); color: var(--color-gw-ink); }
+  .gw-chip:hover { border-color: rgb(240 234 222 / 0.3); color: var(--color-gw-ink); }
   .gw-chip[data-active='true'] {
-    border-color: rgb(46 230 197 / 0.5);
-    background: rgb(46 230 197 / 0.14);
-    color: var(--color-gw-teal);
-    box-shadow: 0 0 20px -8px rgb(46 230 197 / 0.9);
+    border-color: var(--color-gw-verdigris);
+    background: rgb(79 185 165 / 0.12);
+    color: var(--color-gw-verdigris);
   }
-  
-  /* Range sliders (duel setup) are the one control browsers style so
-     differently that leaving them default breaks the whole illusion. */
+
+  /* Range sliders and checkboxes are the two controls browsers style so
+     differently that leaving them default breaks the illusion in one glance. */
   .gw-range {
     -webkit-appearance: none;
     appearance: none;
-    height: 4px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, rgb(46 230 197 / 0.5), rgb(76 201 255 / 0.25));
+    height: 2px;
+    border-radius: 0;
+    background: rgb(240 234 222 / 0.18);
     outline: none;
   }
   .gw-range::-webkit-slider-thumb {
     -webkit-appearance: none;
-    height: 18px;
-    width: 18px;
+    height: 14px;
+    width: 14px;
     border-radius: 50%;
-    background: var(--color-gw-teal);
-    border: 2px solid #04121a;
-    box-shadow: 0 0 14px rgb(46 230 197 / 0.9);
+    background: var(--color-gw-verdigris);
     cursor: pointer;
   }
   .gw-range::-moz-range-thumb {
-    height: 16px;
-    width: 16px;
+    height: 14px;
+    width: 14px;
+    border: 0;
     border-radius: 50%;
-    background: var(--color-gw-teal);
-    border: 2px solid #04121a;
-    box-shadow: 0 0 14px rgb(46 230 197 / 0.9);
+    background: var(--color-gw-verdigris);
     cursor: pointer;
   }
-  
-  /* Checkboxes, same reasoning as the slider. */
+
   .gw-check {
     -webkit-appearance: none;
     appearance: none;
-    height: 1.05rem;
-    width: 1.05rem;
-    border: 1px solid rgb(255 255 255 / 0.25);
-    border-radius: 5px;
-    background: rgb(3 6 14 / 0.6);
+    height: 1rem;
+    width: 1rem;
+    border: 1px solid rgb(240 234 222 / 0.28);
+    border-radius: 3px;
+    background: var(--color-gw-ground);
     display: grid;
     place-content: center;
     cursor: pointer;
-    transition: all 0.16s;
+    transition: all 0.15s ease;
   }
   .gw-check::after {
     content: '';
-    height: 0.55rem;
-    width: 0.3rem;
-    border: solid #03181c;
+    height: 0.5rem;
+    width: 0.28rem;
+    border: solid #0b1512;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) scale(0);
-    transition: transform 0.16s;
+    transition: transform 0.12s ease;
     margin-bottom: 2px;
   }
   .gw-check:checked {
-    background: var(--color-gw-teal);
-    border-color: var(--color-gw-teal);
-    box-shadow: 0 0 16px -2px rgb(46 230 197 / 0.8);
+    background: var(--color-gw-verdigris);
+    border-color: var(--color-gw-verdigris);
   }
   .gw-check:checked::after { transform: rotate(45deg) scale(1); }
 }
 
-/* ---------------------------------------------------------------------------
-   Motion
-   --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------- motion */
 
 @keyframes shake {
   10%, 90% { transform: translateX(-2px); }
@@ -336,70 +282,44 @@
 .animate-shake { animation: shake 0.4s; }
 
 @keyframes timer-critical {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(255 95 126 / 0.7); }
-  50% { box-shadow: 0 0 18px 6px rgb(255 95 126 / 0.9); }
+  0%, 100% { border-color: rgb(217 97 110 / 0.5); }
+  50% { border-color: rgb(217 97 110 / 1); }
 }
-.animate-timer-critical { animation: timer-critical 0.8s ease-in-out infinite; }
+.animate-timer-critical { animation: timer-critical 0.9s ease-in-out infinite; }
 
 @keyframes round-result {
-  0% { opacity: 0; transform: scale(0.85); }
-  15% { opacity: 1; transform: scale(1.05); }
-  25% { transform: scale(1); }
+  0% { opacity: 0; transform: translateY(6px); }
+  12% { opacity: 1; transform: none; }
   85% { opacity: 1; }
   100% { opacity: 0; }
 }
-.animate-round-result { animation: round-result 2s ease-in-out both; }
+.animate-round-result { animation: round-result 2s ease-out both; }
 
-@keyframes gw-sheen {
-  0%, 55% { transform: translateX(-120%); }
-  85%, 100% { transform: translateX(120%); }
+/* Entrance for stacked content -- staggered via inline animation-delay.
+   Plain ease-out, not a spring: overshoot easing is its own kind of tell. */
+@keyframes gw-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
+.gw-rise { animation: gw-rise 0.45s ease-out both; }
 
-/* Two slow-drifting color fields behind everything. Different periods and
-   directions so they never visibly loop together. */
-@keyframes gw-drift-a {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(6%, -4%, 0) scale(1.12); }
+/* Correct-answer acknowledgement: the border flashes, nothing pulses. */
+@keyframes gw-flash {
+  0% { background-color: rgb(79 185 165 / 0.3); }
+  100% { background-color: transparent; }
 }
-@keyframes gw-drift-b {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
-  50% { transform: translate3d(-7%, 5%, 0) scale(1); }
-}
-.gw-drift-a { animation: gw-drift-a 26s ease-in-out infinite; }
-.gw-drift-b { animation: gw-drift-b 34s ease-in-out infinite; }
+.gw-flash { animation: gw-flash 0.7s ease-out; }
 
-@keyframes gw-twinkle {
-  0%, 100% { opacity: 0.25; }
+@keyframes gw-breathe {
+  0%, 100% { opacity: 0.45; }
   50% { opacity: 0.9; }
 }
+.gw-breathe { animation: gw-breathe 2.6s ease-in-out infinite; }
 
 @keyframes gw-spin {
   to { transform: rotate(360deg); }
 }
-.gw-spin-slow { animation: gw-spin 24s linear infinite; }
-.gw-spin-slower { animation: gw-spin 60s linear infinite; }
-
-/* Entrance for stacked content -- staggered via inline animation-delay. */
-@keyframes gw-rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
-}
-.gw-rise {
-  animation: gw-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* Correct-answer celebration on the answer box. */
-@keyframes gw-flare {
-  0% { box-shadow: 0 0 0 0 rgb(46 230 197 / 0.75), 0 0 40px -12px rgb(46 230 197 / 0.9); }
-  100% { box-shadow: 0 0 0 22px rgb(46 230 197 / 0), 0 0 40px -12px rgb(46 230 197 / 0.5); }
-}
-.gw-flare { animation: gw-flare 0.9s ease-out; }
-
-@keyframes gw-pulse-soft {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-.gw-pulse-soft { animation: gw-pulse-soft 2.4s ease-in-out infinite; }
+.gw-spin-slow { animation: gw-spin 90s linear infinite; }
 
 /* Everything above is decoration. None of it carries information that isn't
    also in the layout, so switching it all off costs nothing. */

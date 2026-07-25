@@ -54,13 +54,19 @@ export default function NewDuel() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <div className="w-full max-w-sm">
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
+          <span aria-hidden="true">←</span> Guesswhere
+        </Link>
+      </div>
+
       <div className="text-center">
-        <h1 className="gw-display text-5xl font-black tracking-[0.12em]">Duels</h1>
+        <h1 className="gw-display text-4xl">Duels</h1>
         <p className="mt-3 max-w-sm text-sm text-gw-mute">Create a lobby, share the join code, race to solve rounds first.</p>
       </div>
 
       <details className="gw-panel w-full max-w-sm px-4 py-3 text-sm text-gw-mute">
-        <summary className="cursor-pointer font-medium text-gw-ink marker:text-gw-teal">How duels differ from solo</summary>
+        <summary className="cursor-pointer font-medium text-gw-ink marker:text-gw-verdigris">How duels differ from solo</summary>
         <ul className="mt-2 list-disc space-y-1.5 pl-4">
           <li>Rounds don&apos;t follow solo&apos;s &quot;no two cities share a country&quot; rule -- each round is picked independently, so the same country can come up more than once in a match.</li>
           <li>There&apos;s no Reveal button. A round nobody solves before the timer runs out is shown to everyone automatically instead.</li>
@@ -72,7 +78,7 @@ export default function NewDuel() {
       <div className="flex w-full max-w-sm flex-col gap-5">
         {user ? (
           <p className="text-center text-sm text-gw-mute">
-            Hosting as <span className="font-semibold text-gw-teal">{user.username}</span>
+            Hosting as <span className="font-semibold text-gw-verdigris">{user.username}</span>
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -121,7 +127,7 @@ export default function NewDuel() {
             inputMode="numeric"
             value={formatThousands(population)}
             onChange={(e) => setPopulation(parseDigits(e.target.value))}
-            className="gw-input gw-num w-52 px-3 py-2.5 text-center text-2xl font-semibold text-gw-teal"
+            className="gw-input gw-num w-52 px-3 py-2.5 text-center text-2xl font-semibold text-gw-verdigris"
           />
           <div className="flex gap-2">
             {BOARD_POPULATIONS.map((p) => (
@@ -158,14 +164,14 @@ export default function NewDuel() {
       {!user && !userLoading && (
         <p className="text-sm text-gw-faint">
           or{' '}
-          <Link href="/" className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
+          <Link href="/" className="underline decoration-gw-verdigris/40 underline-offset-4 transition hover:text-gw-verdigris">
             sign in
           </Link>{' '}
           to use your account name
         </p>
       )}
 
-      {error && <p className="rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-4 py-2 text-sm text-gw-rose">{error}</p>}
+      {error && <p className="rounded-lg border border-gw-vermilion/30 bg-gw-vermilion/10 px-4 py-2 text-sm text-gw-vermilion">{error}</p>}
     </div>
   );
 }

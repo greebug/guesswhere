@@ -188,41 +188,62 @@ grading, the leaderboard API, `rivers.json`, asset prefixing (no un-prefixed
 `/_next/` refs remain), and Blitz's socket.io handshake including the WebSocket
 upgrade. **Not yet deployed** — nothing has been pushed.
 
-## The visual system — "orbital telemetry" (2026-07-25)
+## The visual system — "night atlas" (2026-07-25)
 
 The UI was plain zinc-on-white-buttons Tailwind; it's now a designed system.
 **Read `web/app/globals.css` first — it's the whole thing**, and the components
 just assemble its pieces.
 
-- **Palette is meaning-driven, not decorative.** The game already assigned
-  meaning to three colors, and the system just extends it everywhere: **teal =
-  found/correct/go** (same teal as the map's eliminated tint), **amber =
-  revealed/gave up**, **rose = report/destructive**. Everything else stays
-  monochrome — that's what stops three saturated accents becoming a fruit salad.
-  Backdrop is navy, never neutral black: pure `#000` beside satellite imagery
-  reads as a hole in the page.
-- **Class vocabulary**: `gw-panel` (glass card) / `gw-panel-lit` (+`--gw-tone`
-  for a colored glow) / `gw-btn` + `gw-tone-*` / `gw-cta` / `gw-input` /
-  `gw-chip` / `gw-check` / `gw-range` / `gw-eyebrow` / `gw-num` (every live
-  number, mono + tabular) / `gw-display` (gradient headline) / `gw-rule`.
-- **`components/SpaceBackdrop.tsx`** — fixed backdrop, mounted once in the root
-  layout. Drifting color clouds, a graticule, and 140 stars. **Star positions
-  come from a seeded PRNG, not `Math.random()`** — random ones would differ
-  between the server render and hydration and React would complain. All CSS and
-  inline SVG: a decorative background must never add a network request (and
-  Mapbox is the only imagery this project fetches, by invariant).
-- **`components/OrbitMark.tsx`** — the wireframe-globe logo. Each satellite is a
-  *sibling of its ring inside the same rotating group*, so it never moves
-  relative to the ring and the ring's rotation does the work. That dodges
-  needing SMIL or `offset-path` to send a dot around an ellipse, and it honors
-  `prefers-reduced-motion` for free.
-- **GameHeader gained a 10-round progress track** — pips colored by settle state
-  (teal found / amber revealed / dim open), ringed on the current round, and
-  **clickable to jump to that round**. That last part is a behavior addition, not
-  just a restyle: it's random-access pagination alongside the answer box's
-  existing arrows.
-- Duel `PLAYER_COLORS` were retuned to the same palette. They sit on near-black
-  glass *and* on satellite imagery, so they need the extra luminance.
+**This is the SECOND visual pass.** The first went full sci-fi console (glass
+panels, gradient buttons, glows, a starfield, everything in a card) and Jesse's
+verdict was that it read as "obviously AI", pointing at
+[pbakaus/impeccable](https://github.com/pbakaus/impeccable) — whose whole thesis
+is that every model trained on the same SaaS templates emits the same tells.
+**The named tells were exactly what pass one had**: glassmorphism, saturated
+gradient fills, dark glows, nested cards, and a default font. Do not reintroduce
+them; the fix was removal, not tuning.
+
+- **Reference point is a printed atlas under a lamp, not a spacecraft HUD.**
+  Warm paper ink (`#f0eade`) on a cold dark ground (`#0e141a`) — a warm-on-cold
+  pairing is the single biggest reason it doesn't read as a stock dark theme,
+  since cold blue-white on cold dark is what everything ships with.
+- **Palette is meaning-driven, not decorative**, and matches the map:
+  **verdigris = found/correct/go**, **ochre = revealed/gave up**,
+  **vermilion = report/destructive**. Everything else is ink and paper. The
+  accents are desaturated printed-ink tones on purpose — these sit beside real
+  satellite photography and neon loses to it every time.
+- **Three typefaces, three jobs, none of them defaults**: Fraunces (display
+  serif, `SOFT`/`WONK` axes on for a little irregularity), Archivo (UI), IBM
+  Plex Mono (every live number). Typography is the fastest thing a person reads
+  as designed-or-not.
+- **Surfaces are flat and opaque.** No `backdrop-filter`, no white-tinted glass,
+  no drop shadows (invisible on a dark ground anyway), no glow used for
+  hierarchy. Structure comes from borders, rules, and space. **A card must earn
+  itself** — related controls sit on the page separated by rules, not nested two
+  boxes deep.
+- **Class vocabulary**: `gw-panel` / `gw-panel-lit` (+`--gw-tone`) / `gw-btn` +
+  `gw-tone-*` / `gw-cta` (solid ink, no gradient) / `gw-input` / `gw-chip` /
+  `gw-check` / `gw-range` / `gw-eyebrow` / `gw-num` / `gw-display` / `gw-rule`.
+- **`components/Backdrop.tsx`** — a graticule, a little lamplight, and SVG
+  fractal-noise paper grain. All CSS and inline SVG: Mapbox is the only imagery
+  this project fetches, by invariant. **It replaced a starfield that carried a
+  real bug**: stars were drawn in an SVG with `preserveAspectRatio="none"` on
+  the assumption a `px` radius resists the viewBox stretch. It doesn't — the
+  stretch applies to the whole coordinate system, so 1.5px radii rendered as
+  20px grey ovals sitting on top of the text on every screen.
+- **`components/GlobeMark.tsx`** — a wireframe globe drawn like an engraving,
+  meridians turning behind a fixed outline. Replaced a three-ring orbiting-
+  satellite mark: the game is about looking at the ground, not leaving it.
+- **GameHeader has a 10-round progress track** — pips by settle state
+  (verdigris found / ochre revealed / hollow open), ringed on the current round,
+  and **clickable to jump there** (a behavior addition, not just a restyle).
+  The ring is a **box-shadow, and the pips don't scale**: the first version used
+  `scale-150 ring-2 ring-offset-2`, which pushed the current pip outside the
+  header bar and looked clipped against the map behind it.
+- Every duel screen has a back link to the menu. Lobby, name prompt, join page
+  and creation were all dead ends before.
+- Duel `PLAYER_COLORS` follow the same palette; they sit on dark chrome *and* on
+  satellite imagery and need the luminance.
 
 **Two traps, both hit for real during this work:**
 

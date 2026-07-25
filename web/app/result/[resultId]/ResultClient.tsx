@@ -35,7 +35,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 ">
-        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-rose">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
+        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-vermilion">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           Back to Guesswhere
         </Link>
@@ -45,7 +45,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
   if (!result) {
     return (
       <div className="flex min-h-screen items-center justify-center ">
-        <p className="gw-eyebrow gw-pulse-soft">Loading</p>
+        <p className="gw-eyebrow gw-breathe">Loading</p>
       </div>
     );
   }
@@ -59,7 +59,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
       </div>
 
       <div className="w-full max-w-xl text-center">
-        <h1 className="gw-display text-4xl font-black tracking-[0.08em]">{result.username}</h1>
+        <h1 className="gw-display text-3xl">{result.username}</h1>
         <p className="mt-1 text-4xl font-bold tabular-nums">{formatDuration(result.totalMs)}</p>
         <p className="mt-2 text-sm text-gw-mute">
           {formatPopulation(result.targetPopulation)}

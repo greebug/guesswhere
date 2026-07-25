@@ -30,10 +30,16 @@ interface GameHeaderProps {
   elapsedMs: number;
 }
 
-/** The ten-round progress track. Each pip carries two pieces of information at
- * once -- settled state by color (teal found / amber revealed / dim pending)
- * and current position by the ring around it -- which is what lets it replace
- * the old "6/10" text rather than just decorate it. */
+/** The ten-round progress track. Each pip carries two things at once: settle
+ * state by fill (verdigris found / ochre revealed / hollow open) and current
+ * position by the ring around it.
+ *
+ * The ring is a box-shadow rather than Tailwind's `ring` + `ring-offset`, and
+ * the pips don't scale. Both are for the same reason: the first version used
+ * `scale-150 ring-2 ring-offset-2`, which pushed the current pip past the
+ * header's own height and clipped it. A box-shadow ring paints outside the
+ * element's box without affecting layout, and the row below reserves the
+ * space it needs. */
 function RoundTrack({
   rounds,
   currentIndex,
@@ -44,10 +50,12 @@ function RoundTrack({
   onJump: (index: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex h-6 items-center gap-[7px] px-1">
       {rounds.map((r, i) => {
         const state = r.solved ? 'solved' : r.revealed ? 'revealed' : 'open';
         const isCurrent = i === currentIndex;
+        const fill =
+          state === 'solved' ? '#4fb9a5' : state === 'revealed' ? '#d9a441' : 'transparent';
         return (
           <button
             key={i}
@@ -55,16 +63,31 @@ function RoundTrack({
             aria-label={`Round ${i + 1}${state === 'open' ? '' : `, ${state}`}`}
             aria-current={isCurrent}
             title={`Round ${i + 1}`}
-            className={`h-2.5 w-2.5 rounded-full transition-all duration-200 hover:scale-125 ${
-              state === 'solved'
-                ? 'bg-gw-teal shadow-[0_0_10px_rgb(46,230,197,0.8)]'
-                : state === 'revealed'
-                  ? 'bg-gw-amber shadow-[0_0_10px_rgb(255,179,64,0.7)]'
-                  : 'bg-white/25'
-            } ${isCurrent ? 'scale-150 ring-2 ring-white/70 ring-offset-2 ring-offset-black/60' : ''}`}
+            className="h-[9px] w-[9px] shrink-0 rounded-full border transition-colors"
+            style={{
+              background: fill,
+              borderColor:
+                state === 'open' ? 'rgb(240 234 222 / 0.35)' : fill,
+              // Gap ring: ground-colored spacer, then a hairline. Painted
+              // outside the box, so it costs no layout.
+              boxShadow: isCurrent
+                ? '0 0 0 2.5px #0e141a, 0 0 0 3.5px rgb(240 234 222 / 0.6)'
+                : undefined,
+            }}
           />
         );
       })}
+    </div>
+  );
+}
+
+/** A labelled readout. Small caps label over a mono value -- the pattern the
+ * whole app uses for anything that changes while you watch it. */
+function Readout({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-end gap-0.5 leading-none">
+      <span className="gw-eyebrow text-[9px] tracking-[0.12em]">{label}</span>
+      <span className="gw-num text-[15px] text-gw-ink">{children}</span>
     </div>
   );
 }
@@ -107,14 +130,7 @@ export default function GameHeader({
   }
 
   return (
-    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-white/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink backdrop-blur-xl">
-      {/* A lit hairline along the bottom edge -- the seam between the console
-          and the world it looks out on. */}
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-gw-teal/50 to-transparent"
-      />
-
+    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-gw-ink/10 bg-gw-ground px-3 py-2">
       <div className="flex items-center gap-2">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           Home
@@ -123,41 +139,32 @@ export default function GameHeader({
           onClick={shareCities}
           disabled={copyState === 'working'}
           title="Copy a link that gives a friend their own playthrough of these same 10 cities"
-          className={`gw-btn px-3 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-teal' : ''}`}
+          className={`gw-btn px-3 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-verdigris' : ''}`}
         >
-          {copyState === 'copied' ? '✓ Copied' : 'Share Cities'}
+          {copyState === 'copied' ? 'Copied' : 'Share cities'}
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-5">
         <RoundTrack rounds={rounds} currentIndex={currentSlide - 1} onJump={onJump} />
 
-        <span className="hidden h-7 w-px bg-white/10 sm:block" aria-hidden="true" />
+        <span className="hidden h-7 w-px bg-gw-ink/10 sm:block" aria-hidden="true" />
 
-        <div className="hidden flex-col items-end leading-none sm:flex">
-          <span className="gw-eyebrow text-[9px]">Found</span>
-          <span className="gw-num text-sm font-semibold text-gw-teal">
+        <div className="hidden sm:block">
+          <Readout label="Found">
             {correctCount}
             <span className="text-gw-faint">/{totalRounds}</span>
-          </span>
+          </Readout>
         </div>
 
-        <div className="flex flex-col items-end leading-none">
-          <span className="gw-eyebrow text-[9px]">Elapsed</span>
-          <span
-            className="gw-num text-lg font-semibold text-gw-ink"
-            style={{ textShadow: '0 0 18px rgb(46 230 197 / 0.5)' }}
-          >
-            {formatDuration(elapsedMs)}
-          </span>
-        </div>
+        <Readout label="Elapsed">{formatDuration(elapsedMs)}</Readout>
 
         <button
           onClick={onRecenter}
           title="Snap back to the pinpointed view of this round's city"
-          className="gw-btn gw-tone-cyan px-3 py-1.5 text-sm"
+          className="gw-btn gw-tone-indigo px-3 py-1.5 text-sm"
         >
-          🎯 Recenter
+          Recenter
         </button>
       </div>
 
@@ -166,17 +173,17 @@ export default function GameHeader({
           onClick={onReveal}
           disabled={revealDisabled}
           title="Give up on this round and show the answer"
-          className="gw-btn gw-tone-amber px-3 py-1.5 text-sm"
+          className="gw-btn gw-tone-ochre px-3 py-1.5 text-sm"
         >
-          👁 Reveal
+          Reveal
         </button>
         <button
           onClick={onReport}
           disabled={reportPending}
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round and excludes the city from all future games"
-          className="gw-btn gw-tone-rose px-3 py-1.5 text-sm"
+          className="gw-btn gw-tone-vermilion px-3 py-1.5 text-sm"
         >
-          🚩 Report Round
+          Report round
         </button>
       </div>
     </div>

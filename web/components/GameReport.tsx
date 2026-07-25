@@ -55,7 +55,7 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
           onClick={shareCities}
           disabled={copyState === 'working'}
           title="Copy a link that gives a friend their own playthrough of these same 10 cities"
-          className={`gw-btn px-4 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-teal' : ''}`}
+          className={`gw-btn px-4 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-verdigris' : ''}`}
         >
           {copyState === 'copied' ? '✓ Copied' : 'Share Cities'}
         </button>
@@ -64,20 +64,20 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
       {/* The scoreboard. The time is the hero here -- it's the number that
           goes on the leaderboard and the one people compare. */}
       <div
-        className="gw-rise gw-panel gw-panel-lit w-full max-w-xl px-6 py-7 text-center"
-        style={{ ['--gw-tone' as string]: perfect ? '46 230 197' : '255 179 64' }}
+        className="gw-rise gw-panel w-full max-w-xl px-6 py-7 text-center"
+        style={{ ['--gw-tone' as string]: perfect ? '79 185 165' : '217 164 65' }}
       >
         <p className="gw-eyebrow">{perfect ? 'Clean sweep' : 'Run complete'}</p>
-        <h1 className="mt-1 text-xl font-bold text-gw-ink">
+        <h1 className="gw-display mt-1 text-xl text-gw-ink">
           {perfect ? 'All 10 found' : `${solved} of ${summary.rounds.length} found`}
         </h1>
-        <p className="gw-display gw-num mt-3 text-6xl font-black">
+        <p className="gw-display gw-num mt-3 text-5xl">
           {formatDuration(summary.totalMs)}
         </p>
 
         {summary.eligible ? (
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-gw-teal/40 bg-gw-teal/10 px-3 py-1 text-xs font-semibold text-gw-teal">
-            <span className="h-1.5 w-1.5 rounded-full bg-gw-teal gw-pulse-soft" />
+          <p className="mt-4 inline-flex items-center gap-2 rounded border border-gw-verdigris/40 bg-gw-verdigris/10 px-3 py-1 text-xs font-semibold text-gw-verdigris">
+            <span className="h-1.5 w-1.5 rounded-full bg-gw-verdigris gw-breathe" />
             Submitted to the leaderboard
           </p>
         ) : (
@@ -87,7 +87,7 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
         )}
       </div>
 
-      <div className="gw-rise w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 shadow-[0_24px_48px_-24px_rgb(0,0,0,0.9)]" style={{ animationDelay: '0.1s' }}>
+      <div className="gw-rise w-full max-w-xl overflow-hidden rounded-md border border-gw-ink/10" style={{ animationDelay: '0.1s' }}>
         <ResultMap dots={summary.rounds.map((r) => ({ name: r.name, lat: r.lat, lon: r.lon }))} />
       </div>
 

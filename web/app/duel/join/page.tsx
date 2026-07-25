@@ -40,7 +40,13 @@ export default function JoinDuel() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
-      <h1 className="gw-display text-5xl font-black tracking-[0.12em]">Join Duel</h1>
+      <div className="w-full max-w-sm">
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
+          <span aria-hidden="true">←</span> Guesswhere
+        </Link>
+      </div>
+
+      <h1 className="gw-display text-4xl">Join a duel</h1>
 
       <div className="flex flex-col gap-2">
         <label className="gw-eyebrow text-center">Join Code</label>
@@ -52,13 +58,13 @@ export default function JoinDuel() {
           maxLength={4}
           placeholder="ABCD"
           autoFocus
-          className="gw-input gw-num w-52 px-3 py-4 text-center text-4xl font-bold tracking-[0.35em] text-gw-teal uppercase"
+          className="gw-input gw-num w-52 px-3 py-4 text-center text-4xl font-bold tracking-[0.35em] text-gw-verdigris uppercase"
         />
       </div>
 
       {user ? (
         <p className="text-sm text-gw-mute">
-          Playing as <span className="font-semibold text-gw-teal">{user.username}</span>
+          Playing as <span className="font-semibold text-gw-verdigris">{user.username}</span>
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -86,14 +92,14 @@ export default function JoinDuel() {
       {!user && !userLoading && (
         <p className="text-sm text-gw-faint">
           or{' '}
-          <Link href="/" className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
+          <Link href="/" className="underline decoration-gw-verdigris/40 underline-offset-4 transition hover:text-gw-verdigris">
             sign in
           </Link>{' '}
           to use your account name
         </p>
       )}
 
-      {error && <p className="rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-4 py-2 text-sm text-gw-rose">{error}</p>}
+      {error && <p className="rounded-lg border border-gw-vermilion/30 bg-gw-vermilion/10 px-4 py-2 text-sm text-gw-vermilion">{error}</p>}
     </div>
   );
 }

@@ -31,9 +31,9 @@ export default function AnswerBox({
 }: AnswerBoxProps) {
   const [value, setValue] = useState('');
   const [shake, setShake] = useState(false);
-  // One-shot flare on the transition into solved, not a permanent glow --
-  // the celebration is the moment, the green is the state.
-  const [flare, setFlare] = useState(false);
+  // One-shot acknowledgement on the transition into solved, not a standing
+  // glow -- the celebration is the moment, the color is the state.
+  const [flash, setFlash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const settled = solved || revealed;
 
@@ -43,7 +43,7 @@ export default function AnswerBox({
   useEffect(() => {
     setValue('');
     setShake(false);
-    setFlare(false);
+    setFlash(false);
   }, [resetKey]);
 
   // Left/Right paginate between rounds -- but only when the answer box isn't
@@ -65,8 +65,8 @@ export default function AnswerBox({
     const result = await onGuess(value);
     if (result.correct) {
       playCorrect();
-      setFlare(true);
-      setTimeout(() => setFlare(false), 900);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 700);
     } else {
       playIncorrect();
       setValue('');
@@ -76,22 +76,21 @@ export default function AnswerBox({
   }
 
   const tone = solved
-    ? { ring: 'rgb(46 230 197)', text: 'text-gw-teal', label: 'Found' }
+    ? { edge: '#4fb9a5', text: 'text-gw-verdigris', label: 'Found' }
     : revealed
-      ? { ring: 'rgb(255 179 64)', text: 'text-gw-amber', label: 'Revealed' }
-      : { ring: 'rgb(255 255 255 / 0.15)', text: 'text-gw-ink', label: null as string | null };
+      ? { edge: '#d9a441', text: 'text-gw-ochre', label: 'Revealed' }
+      : { edge: 'rgb(240 234 222 / 0.16)', text: 'text-gw-ink', label: null as string | null };
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2.5">
       <PagerButton direction="prev" onClick={onPrev} disabled={!canPrev} />
 
       <form onSubmit={submit} className="relative flex-1">
-        {/* The status cap sits above the field rather than inside it, so a
-            long "City, Country" answer never has to share a line with it. */}
+        {/* The status word sits above the field rather than inside it, so a
+            long "City, Country" answer never shares a line with it. */}
         {tone.label && (
           <span
-            className={`absolute -top-2.5 left-4 z-10 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${tone.text}`}
-            style={{ borderColor: tone.ring, background: '#050b14' }}
+            className={`gw-eyebrow absolute -top-2 left-3 z-10 bg-gw-ground px-1.5 text-[10px] ${tone.text}`}
           >
             {tone.label}
           </span>
@@ -109,15 +108,10 @@ export default function AnswerBox({
           // resolve by class-attribute order, they resolve by whichever
           // Tailwind happened to emit later in the stylesheet -- so listing a
           // default alongside the real one is a coin flip, not a fallback.
-          className={`w-full rounded-2xl border-2 bg-black/70 px-6 py-4 text-center text-2xl font-semibold shadow-2xl outline-none backdrop-blur-md transition-all placeholder:font-normal placeholder:text-gw-faint ${
-            settled ? '' : 'focus:border-gw-cyan/70'
-          } ${shake ? 'animate-shake' : ''} ${flare ? 'gw-flare' : ''} ${tone.text}`}
-          style={{
-            borderColor: tone.ring,
-            boxShadow: settled
-              ? `0 0 40px -12px ${tone.ring}, inset 0 0 30px -18px ${tone.ring}`
-              : '0 24px 48px -24px rgb(0 0 0 / 0.9)',
-          }}
+          className={`w-full rounded-[6px] border bg-gw-ground/95 px-6 py-3.5 text-center text-2xl outline-none transition-colors placeholder:text-gw-faint ${
+            settled ? '' : 'focus:border-gw-verdigris/70'
+          } ${shake ? 'animate-shake' : ''} ${flash ? 'gw-flash' : ''} ${tone.text}`}
+          style={{ borderColor: tone.edge }}
         />
       </form>
 
@@ -140,7 +134,7 @@ function PagerButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={direction === 'prev' ? 'Previous city' : 'Next city'}
-      className="gw-btn h-14 w-14 shrink-0 rounded-full text-xl backdrop-blur-md"
+      className="gw-btn h-12 w-12 shrink-0 bg-gw-ground/95 text-lg"
     >
       {direction === 'prev' ? '←' : '→'}
     </button>

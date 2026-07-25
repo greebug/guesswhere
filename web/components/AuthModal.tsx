@@ -67,12 +67,12 @@ export default function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gw-ground/80 px-4"
       onClick={onClose}
     >
       <div
-        className="gw-rise gw-panel gw-panel-lit w-full max-w-sm p-6"
-        style={{ ['--gw-tone' as string]: '46 230 197' }}
+        className="gw-rise gw-panel w-full max-w-sm p-6"
+        style={{ ['--gw-tone' as string]: '79 185 165' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -142,22 +142,22 @@ export default function AuthModal({
           </button>
         </form>
 
-        {error && <p className="mt-3 rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-3 py-2 text-sm text-gw-rose">{error}</p>}
-        {notice && <p className="mt-3 rounded-lg border border-gw-teal/30 bg-gw-teal/10 px-3 py-2 text-sm text-gw-teal">{notice}</p>}
+        {error && <p className="mt-3 rounded-lg border border-gw-vermilion/30 bg-gw-vermilion/10 px-3 py-2 text-sm text-gw-vermilion">{error}</p>}
+        {notice && <p className="mt-3 rounded-lg border border-gw-verdigris/30 bg-gw-verdigris/10 px-3 py-2 text-sm text-gw-verdigris">{notice}</p>}
 
         <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gw-mute">
           {mode !== 'login' && (
-            <button onClick={() => setMode('login')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
+            <button onClick={() => setMode('login')} className="underline decoration-gw-verdigris/40 underline-offset-4 transition hover:text-gw-verdigris">
               Sign in
             </button>
           )}
           {mode !== 'signup' && (
-            <button onClick={() => setMode('signup')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
+            <button onClick={() => setMode('signup')} className="underline decoration-gw-verdigris/40 underline-offset-4 transition hover:text-gw-verdigris">
               Create an account
             </button>
           )}
           {mode !== 'forgot' && emailEnabled && (
-            <button onClick={() => setMode('forgot')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
+            <button onClick={() => setMode('forgot')} className="underline decoration-gw-verdigris/40 underline-offset-4 transition hover:text-gw-verdigris">
               Forgot password?
             </button>
           )}

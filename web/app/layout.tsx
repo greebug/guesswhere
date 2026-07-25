@@ -1,16 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import SpaceBackdrop from "@/components/SpaceBackdrop";
+import { Archivo, Fraunces, IBM_Plex_Mono } from "next/font/google";
+import Backdrop from "@/components/Backdrop";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Three faces, three jobs, and deliberately none of the defaults. Inter,
+// Geist and the system stack are what every generated UI ships with, and a
+// typeface is the fastest thing a person reads as "this was designed" or not.
+//
+// Fraunces carries the display type: a variable serif whose `SOFT` and `WONK`
+// axes give it a slight irregularity, which suits a game that shouldn't take
+// itself too seriously. Archivo is the UI grotesque -- plain on purpose, it's
+// the thing you read rather than look at. IBM Plex Mono handles every live
+// number (timers, scores, join codes); its shapes are technical without being
+// a terminal cosplay.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  axes: ["SOFT", "WONK", "opsz"],
+});
+
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -26,13 +43,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${archivo.variable} ${plexMono.variable} h-full antialiased`}
     >
       {/* The backdrop is fixed and -z-10, so it costs the play screen nothing
           (MainMap paints over all of it) while giving every other screen a
-          sky to sit on. */}
+          ground to sit on. */}
       <body className="min-h-full flex flex-col">
-        <SpaceBackdrop />
+        <Backdrop />
         {children}
       </body>
     </html>

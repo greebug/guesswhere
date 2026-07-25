@@ -54,11 +54,11 @@ export default function DuelReport({ players, winnerId, rounds }: DuelReportProp
       {/* The whole panel is lit in the winner's color -- the fastest possible
           read on "who won" before anyone parses a single number. */}
       <div
-        className="gw-rise gw-panel gw-panel-lit w-full max-w-xl px-6 py-7 text-center"
+        className="gw-rise gw-panel w-full max-w-xl px-6 py-7 text-center"
         style={{ ['--gw-tone' as string]: hexToRgbTriplet(winnerColor) }}
       >
         <p className="gw-eyebrow">Match complete</p>
-        <h1 className="mt-1 text-4xl font-black" style={{ color: winnerColor }}>
+        <h1 className="mt-1 gw-display text-4xl" style={{ color: winnerColor }}>
           {winner ? `${winner.name} wins` : 'Match complete'}
         </h1>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -83,7 +83,7 @@ export default function DuelReport({ players, winnerId, rounds }: DuelReportProp
         </div>
       </div>
 
-      <div className="gw-rise w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 shadow-[0_24px_48px_-24px_rgb(0,0,0,0.9)]">
+      <div className="gw-rise w-full max-w-xl overflow-hidden rounded-md border border-gw-ink/10">
         <ResultMap
           dots={rounds.map((r) => ({
             name: r.name,
@@ -102,7 +102,7 @@ export default function DuelReport({ players, winnerId, rounds }: DuelReportProp
               const solver = players.find((p) => p.id === r.solvedByPlayerId);
               const color = solver ? colorForPlayer(players, solver.id) : UNSOLVED_COLOR;
               return (
-                <tr key={r.index} className="border-b border-white/[0.06] last:border-0">
+                <tr key={r.index} className="border-b border-gw-ink/[0.07] last:border-0">
                   <td className="gw-num py-2 pr-2 text-xs text-gw-faint">{r.index + 1}</td>
                   <td className="py-2 pr-2" style={{ color }}>
                     {r.name}
