@@ -71,7 +71,7 @@ export default function GameHeader({
         </button>
       </div>
 
-      <div className="flex gap-4 text-sm tabular-nums">
+      <div className="flex items-center gap-4 text-sm tabular-nums">
         <span title="Correct out of 10">
           {correctCount}/{totalRounds} correct
         </span>
@@ -81,9 +81,6 @@ export default function GameHeader({
         <span title="Total time" className="font-medium">
           {formatDuration(elapsedMs)}
         </span>
-      </div>
-
-      <div className="flex items-center gap-3">
         <button
           onClick={onRecenter}
           title="Snap back to the pinpointed view of this round's city"
@@ -91,6 +88,9 @@ export default function GameHeader({
         >
           🎯 Recenter
         </button>
+      </div>
+
+      <div className="flex items-center gap-3">
         <button
           onClick={onReveal}
           disabled={revealDisabled}
