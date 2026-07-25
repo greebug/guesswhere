@@ -186,7 +186,10 @@ What this changed inside `web/`, and why each piece matters:
 Verified end-to-end locally through the real Worker: game creation, guess
 grading, the leaderboard API, `rivers.json`, asset prefixing (no un-prefixed
 `/_next/` refs remain), and Blitz's socket.io handshake including the WebSocket
-upgrade. **Not yet deployed** — nothing has been pushed.
+upgrade. **This has since shipped** — `basePath` is on `origin/master` and the
+game serves from `bingbongblitz.com/guesswhere`. (This paragraph read "not yet
+deployed — nothing has been pushed" for a while after it was no longer true;
+check `git log origin/master` before repeating a deploy-status claim from here.)
 
 ## The visual system — "night atlas" (2026-07-25)
 
