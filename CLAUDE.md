@@ -335,6 +335,48 @@ behaviour by `verify-eliminated.mjs`, but nothing is ever seen rendered. Jesse h
 confirmed the original grey tint and the "City, Country" answer live; **the green/amber
 colors and the island bucket thresholds have not been looked at by anyone yet.**
 
+## Mobile: the gameplay screens (2026-07-25)
+
+Jesse reported Guesswhere "basically unusable on mobile — everything is clipping."
+It was, and only on the two gameplay screens: every menu/report screen measured
+clean at 375px already. What was actually wrong, all measured in a real viewport:
+
+- **The header ran off the right edge.** Seven controls in one non-wrapping flex
+  row reached x=661 in a 375px viewport, so Reveal, Report and Recenter were
+  entirely off screen. Both headers (`GameHeader`, `DuelHeader`) wrap now: nav +
+  actions on the top row, the wide group (round track / scoreboard) on a full-width
+  row of its own. A `w-full` child of a `flex-wrap` parent forces exactly that.
+- **The minimap sat on top of the answer bar.** The tight `bottom-16` offset only
+  clears the bar when the bar's centered `max-w-2xl` column starts to the right of
+  the panel, and that is true at **exactly ≥1280px and nowhere below it** — so this
+  was broken on every tablet and small laptop too, not just phones. Hence the
+  breakpoint for the tight desktop offsets is **`xl`, not `sm`**. Don't "fix" that
+  back to `sm`; it will silently reintroduce a 22px overlap at 768–1279.
+- **The answer bar covered the top 5px of the Mapbox logo** at full width. That
+  attribution is a ToS requirement, so the bar sits at `bottom-10` below `xl`.
+- **`h-screen` → `h-dvh`** on both play screens. `100vh` excludes mobile browser
+  chrome, and these screens deliberately can't scroll, so the bottom was unreachable.
+- **Expanding the minimap made it smaller on a phone**: `w-[42vw]` is 157px at
+  375px wide, narrower than the collapsed `w-72`. Mobile gets `w-[86vw]`.
+- The "hover to expand" hint told touch users to do something their device cannot
+  do. `matchMedia('(hover: hover)')` picks the wording; Pin (a click) works anywhere.
+- Round-track pips were 9px — a fine mouse target, a bad thumb one. The button is
+  now a 28px-tall target with the pip drawn inside it. They can't get much wider:
+  ten of them plus Elapsed and Recenter have to fit one row, and at a 7px gap the
+  row needed 339px of an available 336 on a 360px Android. The gap is 5px on mobile
+  purely to win those three pixels.
+
+Verified at 320/360/375/412/768/1024/1280/1600: zero overflowing elements, no
+minimap/answer-bar overlap, no answer-bar/logo overlap at any of them. 320px is
+deliberately allowed to wrap to a third header row. **Nobody has looked at it**
+— same sandbox limitation as everything else here.
+
+**Gotcha for the next person measuring this:** an "elements wider than the viewport"
+sweep reports ~19 false positives once a round is settled. They're all the minimap's
+answer-pin marker, positioned off-view and clipped by its own `overflow-hidden`;
+`document.documentElement.scrollWidth` stays correct. Check page scrollWidth, or
+skip nodes inside a clipping ancestor.
+
 ## OPEN RIGHT NOW — visual review pending (2026-07-25)
 
 The "night atlas" redesign shipped (`66801f6`) and **nobody has looked at it yet** —

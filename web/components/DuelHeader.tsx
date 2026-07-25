@@ -87,13 +87,17 @@ export default function DuelHeader({
   const hasReported = !!selfPlayerId && reportedBy.includes(selfPlayerId);
 
   return (
-    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-gw-ink/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink">
-      <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
+    // Same wrap treatment as GameHeader: Home + the two action buttons share
+    // the top row on a phone, and the scoreboard takes a full row underneath.
+    // The scoreboard is the part that can't be size-capped -- a four-player
+    // duel is four name chips -- so it's the one that gets its own row.
+    <div className="relative z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gw-ink/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink">
+      <Link href="/" className="order-1 gw-btn px-3 py-1.5 text-sm">
         Home
       </Link>
 
-      <div className="flex items-center gap-3">
-        <div className="flex gap-2">
+      <div className="order-3 flex w-full items-center justify-between gap-3 sm:order-2 sm:w-auto sm:justify-start">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {players.map((p) => (
             <ScoreChip
               key={p.id}
@@ -120,7 +124,7 @@ export default function DuelHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="order-2 flex items-center gap-2 sm:order-3">
         <button
           onClick={onRecenter}
           title="Snap back to the pinpointed view of this round's city"
@@ -134,7 +138,11 @@ export default function DuelHeader({
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round once every player has reported it, and excludes the city from all future games"
           className="gw-btn gw-tone-vermilion px-3 py-1.5 text-sm"
         >
-          {hasReported ? `🚩 Reported (${reportedBy.length}/${totalPlayers})` : '🚩 Report Round'}
+          {hasReported ? (
+            `🚩 Reported (${reportedBy.length}/${totalPlayers})`
+          ) : (
+            <>🚩 Report<span className="hidden sm:inline"> Round</span></>
+          )}
         </button>
       </div>
     </div>

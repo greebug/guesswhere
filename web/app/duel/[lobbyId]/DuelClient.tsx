@@ -262,7 +262,10 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const settled = transitionInfo !== null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden overscroll-none bg-black">
+    // h-dvh and bottom-10: the same two mobile fixes as the solo play screen --
+    // 100vh sits under the browser address bar, and a full-width answer bar at
+    // bottom-6 crosses the Mapbox logo.
+    <div className="flex h-dvh flex-col overflow-hidden overscroll-none bg-black">
       <DuelHeader
         players={state.players}
         targetRounds={state.settings.targetRounds}
@@ -300,7 +303,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
         )}
 
         {displayedRound && (
-          <div className="absolute bottom-6 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4">
+          <div className="absolute bottom-10 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4 xl:bottom-6">
             <AnswerBox
               resetKey={`${displayedRound.index}:${displayedRound.lat}:${displayedRound.lon}`}
               solved={settled ? !!transitionInfo?.solvedByPlayerId : false}

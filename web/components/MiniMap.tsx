@@ -84,6 +84,14 @@ export default function MiniMap({
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
   const expanded = hovering || pinned;
+  // A touch device never fires the hover that expands this panel, so the hint
+  // telling you to hover was instructing a phone user to do something their
+  // device cannot do. Pin is a click and works everywhere -- point at that
+  // instead. Resolved after mount so SSR and the client agree on first paint.
+  const [canHover, setCanHover] = useState(true);
+  useEffect(() => {
+    setCanHover(window.matchMedia('(hover: hover)').matches);
+  }, []);
   // Names of the countries on each side of a border currently crossing the
   // view, or null when no border is on screen (or both sample points landed
   // in the same country). Positions are fixed screen fractions, not stored
@@ -294,11 +302,23 @@ export default function MiniMap({
     <div
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      className={`absolute z-20 left-4 transition-all duration-200 ${expanded ? 'bottom-28' : 'bottom-16'}`}
+      // The tight 64px offset only clears the answer bar when the bar's
+      // centered max-w-2xl column starts to the right of this panel, and that
+      // is true at exactly >=1280px and nowhere below it -- the two have been
+      // overlapping on every phone AND every tablet, not just phones. Hence
+      // `xl`, not `sm`: 1280+ keeps the tuned desktop layout untouched, and
+      // everything narrower sits the panel above the bar instead.
+      className={`absolute z-20 left-4 transition-all duration-200 ${
+        expanded ? 'bottom-28' : 'bottom-28 xl:bottom-16'
+      }`}
     >
       <div
         className={`relative overflow-hidden rounded border-2 border-white/30 shadow-lg transition-all duration-200 ${
-          expanded ? 'h-[50vh] w-[42vw]' : 'h-56 w-72'
+          expanded
+            ? // 42vw is a sensible expansion on a desktop and a NARROWER box
+              // than the collapsed one on a phone, which made "expand" shrink it.
+              'h-[46vh] w-[86vw] sm:h-[50vh] sm:w-[42vw]'
+            : 'h-40 w-52 sm:h-56 sm:w-72'
         }`}
       >
         <div ref={containerRef} className="h-full w-full" />
@@ -354,7 +374,7 @@ export default function MiniMap({
         </div>
         {!expanded && (
           <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
-            hover to expand
+            {canHover ? 'hover to expand' : 'tap Pin to expand'}
           </div>
         )}
       </div>

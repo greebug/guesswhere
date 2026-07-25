@@ -50,31 +50,43 @@ function RoundTrack({
   onJump: (index: number) => void;
 }) {
   return (
-    <div className="flex h-6 items-center gap-[7px] px-1">
+    // gap-[5px] on mobile is worth the fiddliness: at 7px the track measures
+    // 181px and the row it sits in needs 339 of an available 336, so a 360px
+    // Android phone wrapped Recenter onto a third header row for the sake of
+    // three pixels. 5px brings the whole row in with room to spare.
+    <div className="flex h-7 items-center gap-[5px] px-1 sm:h-6 sm:gap-[7px]">
       {rounds.map((r, i) => {
         const state = r.solved ? 'solved' : r.revealed ? 'revealed' : 'open';
         const isCurrent = i === currentIndex;
         const fill =
           state === 'solved' ? '#4fb9a5' : state === 'revealed' ? '#d9a441' : 'transparent';
         return (
+          // The button is a touch target, the span inside it is the pip. A bare
+          // 9px button is a fine mouse target and a bad thumb one, and the pips
+          // can't simply grow -- ten of them plus the readouts and Recenter have
+          // to fit one 375px row. So the target grows vertically (the full
+          // header row) where there IS spare space, and only slightly across.
           <button
             key={i}
             onClick={() => onJump(i)}
             aria-label={`Round ${i + 1}${state === 'open' ? '' : `, ${state}`}`}
             aria-current={isCurrent}
             title={`Round ${i + 1}`}
-            className="h-[9px] w-[9px] shrink-0 rounded-full border transition-colors"
-            style={{
-              background: fill,
-              borderColor:
-                state === 'open' ? 'rgb(240 234 222 / 0.35)' : fill,
-              // Gap ring: ground-colored spacer, then a hairline. Painted
-              // outside the box, so it costs no layout.
-              boxShadow: isCurrent
-                ? '0 0 0 2.5px #0e141a, 0 0 0 3.5px rgb(240 234 222 / 0.6)'
-                : undefined,
-            }}
-          />
+            className="grid h-7 w-[11px] shrink-0 place-items-center sm:h-6 sm:w-[9px]"
+          >
+            <span
+              className="h-[11px] w-[11px] rounded-full border transition-colors sm:h-[9px] sm:w-[9px]"
+              style={{
+                background: fill,
+                borderColor: state === 'open' ? 'rgb(240 234 222 / 0.35)' : fill,
+                // Gap ring: ground-colored spacer, then a hairline. Painted
+                // outside the box, so it costs no layout.
+                boxShadow: isCurrent
+                  ? '0 0 0 2.5px #0e141a, 0 0 0 3.5px rgb(240 234 222 / 0.6)'
+                  : undefined,
+              }}
+            />
+          </button>
         );
       })}
     </div>
@@ -130,8 +142,13 @@ export default function GameHeader({
   }
 
   return (
-    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-gw-ink/10 bg-gw-ground px-3 py-2">
-      <div className="flex items-center gap-2">
+    // Seven controls do not fit one 375px row, and this used to just run off
+    // the right edge -- Reveal and Report were entirely off screen on a phone.
+    // It wraps now: on mobile the nav/action buttons share the top row and the
+    // middle group takes a full row of its own beneath them (`w-full` on a
+    // flex-wrap child forces exactly that). `sm:` restores the single row.
+    <div className="relative z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gw-ink/10 bg-gw-ground px-3 py-2">
+      <div className="order-1 flex items-center gap-2">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           Home
         </Link>
@@ -141,11 +158,35 @@ export default function GameHeader({
           title="Copy a link that gives a friend their own playthrough of these same 10 cities"
           className={`gw-btn px-3 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-verdigris' : ''}`}
         >
-          {copyState === 'copied' ? 'Copied' : 'Share cities'}
+          {copyState === 'copied' ? 'Copied' : <>Share<span className="hidden sm:inline"> cities</span></>}
         </button>
       </div>
 
-      <div className="flex items-center gap-5">
+      {/* Pulled up beside Home on mobile so the middle group gets its own row;
+          source order is restored at sm. */}
+      <div className="order-2 flex items-center gap-2 sm:order-3">
+        <button
+          onClick={onReveal}
+          disabled={revealDisabled}
+          title="Give up on this round and show the answer"
+          className="gw-btn gw-tone-ochre px-3 py-1.5 text-sm"
+        >
+          Reveal
+        </button>
+        <button
+          onClick={onReport}
+          disabled={reportPending}
+          title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round and excludes the city from all future games"
+          className="gw-btn gw-tone-vermilion px-3 py-1.5 text-sm"
+        >
+          Report<span className="hidden sm:inline"> round</span>
+        </button>
+      </div>
+
+      {/* flex-wrap here too: at 320px the track + Elapsed + Recenter still
+          don't fit one line, and wrapping Recenter onto its own is better than
+          picking a magic width for it. Self-adjusting rather than tuned. */}
+      <div className="order-3 flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 sm:order-2 sm:w-auto sm:flex-nowrap sm:justify-start sm:gap-5">
         <RoundTrack rounds={rounds} currentIndex={currentSlide - 1} onJump={onJump} />
 
         <span className="hidden h-7 w-px bg-gw-ink/10 sm:block" aria-hidden="true" />
@@ -165,25 +206,6 @@ export default function GameHeader({
           className="gw-btn gw-tone-indigo px-3 py-1.5 text-sm"
         >
           Recenter
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onReveal}
-          disabled={revealDisabled}
-          title="Give up on this round and show the answer"
-          className="gw-btn gw-tone-ochre px-3 py-1.5 text-sm"
-        >
-          Reveal
-        </button>
-        <button
-          onClick={onReport}
-          disabled={reportPending}
-          title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round and excludes the city from all future games"
-          className="gw-btn gw-tone-vermilion px-3 py-1.5 text-sm"
-        >
-          Report round
         </button>
       </div>
     </div>

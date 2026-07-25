@@ -108,7 +108,10 @@ export default function AnswerBox({
           // resolve by class-attribute order, they resolve by whichever
           // Tailwind happened to emit later in the stylesheet -- so listing a
           // default alongside the real one is a coin flip, not a fallback.
-          className={`w-full rounded-[6px] border bg-gw-ground/95 px-6 py-3.5 text-center text-2xl outline-none transition-colors placeholder:text-gw-faint ${
+          // text-lg on mobile, not smaller: iOS zooms the whole page in when a
+          // focused input's text is under 16px, and this one is focused on
+          // every single round.
+          className={`w-full rounded-[6px] border bg-gw-ground/95 px-3 py-2.5 text-center text-lg outline-none transition-colors placeholder:text-gw-faint sm:px-6 sm:py-3.5 sm:text-2xl ${
             settled ? '' : 'focus:border-gw-verdigris/70'
           } ${shake ? 'animate-shake' : ''} ${flash ? 'gw-flash' : ''} ${tone.text}`}
           style={{ borderColor: tone.edge }}
@@ -134,7 +137,7 @@ function PagerButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={direction === 'prev' ? 'Previous city' : 'Next city'}
-      className="gw-btn h-12 w-12 shrink-0 bg-gw-ground/95 text-lg"
+      className="gw-btn h-11 w-11 shrink-0 bg-gw-ground/95 text-lg sm:h-12 sm:w-12"
     >
       {direction === 'prev' ? '←' : '→'}
     </button>

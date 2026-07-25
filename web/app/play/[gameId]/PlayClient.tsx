@@ -242,7 +242,10 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const liveMs = round.solved || round.revealed ? bankedMs : bankedMs + (now - tickBase);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden overscroll-none bg-black">
+    // h-dvh, not h-screen: `100vh` on mobile browsers is the height WITHOUT the
+    // address bar, so the bottom of a `h-screen` layout sits under browser
+    // chrome until you scroll -- and this screen deliberately can't scroll.
+    <div className="flex h-dvh flex-col overflow-hidden overscroll-none bg-black">
       <GameHeader
         gameId={gameId}
         onRecenter={() => mainMapRef.current?.recenterPinpoint()}
@@ -269,7 +272,11 @@ export default function PlayClient({ gameId }: { gameId: string }) {
           eliminated={eliminated}
         />
 
-        <div className="absolute bottom-6 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4">
+        {/* bottom-10 on mobile, not bottom-6: full-width down there, the bar's
+            lower edge crossed the top of the Mapbox logo, and that attribution
+            has to stay visible (ToS, see CLAUDE.md). Measured at 375px -- the
+            overlap was 5px. */}
+        <div className="absolute bottom-10 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4 xl:bottom-6">
           <AnswerBox
             resetKey={`${round.index}:${round.lat}:${round.lon}`}
             solved={round.solved}
