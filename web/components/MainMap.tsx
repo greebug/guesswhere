@@ -9,19 +9,14 @@ import { boxAroundCenter, distanceKm } from '@/lib/geo';
 // overlays -- and billed as ONE GL JS map load per game (instantiate once,
 // reposition via jumpTo/easeTo between rounds), never the raster tile API.
 //
-// Measured directly against the original game: 11.31mi N/S x 26.59mi E/W
-// (18.2km x 42.8km). An earlier estimate of 27km x 12km was a rough guess
-// from the initial description, not a real measurement -- this replaces it.
-//
-// Both bumped +10% from that measured baseline (per request): the initial
-// framing -- and, since applyWideZoomFloor derives the "can't zoom out
-// further" cap from this same box, the max zoom-out too -- shows more at a
-// glance. PAN_RADIUS_KM below is trimmed -10% to offset it: more visible
-// without panning, but less new ground to find by panning beyond that
-// wider starting view.
-const WIDE_WIDTH_KM = 42.8 * 1.1; // 47.08
-const WIDE_HEIGHT_KM = 18.2 * 1.1; // 20.02
-const PAN_RADIUS_KM = 50 * 0.9; // 45 -- "100km left to right" was the un-adjusted baseline
+// Per request (2026-07-24): initial/max-zoom framing is 25mi wide at 16:9,
+// full pan scope is 75mi wide at 16:9 (both explicit width targets, not
+// derived from the earlier measured-vs-original-game baseline below).
+const MI_PER_KM = 1 / 1.609344;
+const WIDE_WIDTH_KM = 25 / MI_PER_KM; // 40.23
+const WIDE_HEIGHT_KM = WIDE_WIDTH_KM * (9 / 16); // 22.63
+const PAN_WIDTH_KM = 75 / MI_PER_KM; // 120.70
+const PAN_HEIGHT_KM = PAN_WIDTH_KM * (9 / 16); // 67.89
 const PINPOINT_WIDTH_KM = 3;
 const PINPOINT_HEIGHT_KM = 1.5;
 const MAX_ZOOM = 18; // matches measured Esri/Mapbox fidelity ceiling in most regions
@@ -131,7 +126,7 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
 
     const settle = () => {
       applyWideZoomFloor(map, lat, lon);
-      const panBounds = boxAroundCenter(lat, lon, PAN_RADIUS_KM * 2, PAN_RADIUS_KM * 2);
+      const panBounds = boxAroundCenter(lat, lon, PAN_WIDTH_KM, PAN_HEIGHT_KM);
       map.setMaxBounds(panBounds);
       const wideBounds = boxAroundCenter(lat, lon, WIDE_WIDTH_KM, WIDE_HEIGHT_KM);
       map.fitBounds(wideBounds, { animate: false });
