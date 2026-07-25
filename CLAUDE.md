@@ -217,7 +217,9 @@ Jesse confirmed the tint live and asked for two follow-ups, both shipped:
   purpose: the basemap's own vegetation is a yellow-leaning green (`#6aab6a`..`#a9cf8d`),
   and a matching green wash over it reads as more forest rather than as a state change.
   `/eliminated` carries an `outcome` field; the client stamps it onto the cached shape at
-  draw time (the shape itself is shared across rounds, so it isn't mutated).
+  draw time (the shape itself is shared across rounds, so it isn't mutated). Jesse then
+  asked for it stronger and bluer, so the green went `#00a884` → `#009e9a` and the opacity
+  curve up about a third (0.27 → 0.08 across the zoom range).
 - **Island markers are bucketed by size, not all drawn at once.** The first version put a
   dot on all ~1,000 islands at every zoom and Jesse (rightly) found it overkill —
   especially at world view, where the islands you actually navigate by were drowned out by
