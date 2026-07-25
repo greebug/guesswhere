@@ -592,7 +592,10 @@ report-round exclusions (see below) — not bulk geodata. Don't gitignore it.
 - `cloudflare/pmtiles-worker/` — the Protomaps serverless Worker (from
   `github.com/protomaps/PMTiles/tree/main/serverless/cloudflare`) that serves minimap
   tiles from R2 in production. `wrangler deploy` from that directory; `wrangler.toml`
-  has the R2 binding, custom domain route, and `ALLOWED_ORIGINS`.
+  has the R2 binding, custom domain route, and `ALLOWED_ORIGINS`. **Deployed** —
+  Jesse confirmed running the deploy after the `ALLOWED_ORIGINS` change for
+  `bingbongblitz.com`. A `wrangler deploy` leaves no trace in git, so this line is
+  the only record that the live Worker matches this source.
 - `web/` — phase 3 Next.js app (16.x, App Router, Turbopack). `.env.local` needs
   `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_TILES_URL` (the Worker's TileJSON endpoint),
   `CITIES_DB`, `GAME_DB_PATH` (all already set locally). On Railway these are set as
