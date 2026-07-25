@@ -108,16 +108,16 @@ const URBAN_FABRIC_LAYER: LayerSpecification = {
 // the basemap's own vegetation is a yellow-leaning green (#6aab6a..#a9cf8d)
 // and a matching green wash over it reads as more forest, not as a state
 // change. Cooling the green until it's clearly not-a-plant is what makes it
-// legible at 20% opacity.
+// legible at all. It sits well clear of the water color (#79c8e0) too, which
+// is the other thing it could be confused with once it goes this far toward
+// cyan.
 const ELIMINATED_TINT_LAYER: LayerSpecification = {
   id: ELIMINATED_LAYER_ID,
   type: 'fill',
   source: ELIMINATED_SOURCE_ID,
   paint: {
-    'fill-color': ['match', ['get', 'outcome'], 'revealed', '#e08a1e', '#00a884'],
-    // A saturated hue carries more visual weight than the neutral grey this
-    // started as, so the whole curve sits a touch lower than the grey's did.
-    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.2, 5, 0.18, 8, 0.09, 11, 0.055],
+    'fill-color': ['match', ['get', 'outcome'], 'revealed', '#e08a1e', '#009e9a'],
+    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.27, 5, 0.25, 8, 0.13, 11, 0.08],
   },
 };
 

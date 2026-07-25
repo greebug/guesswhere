@@ -35,7 +35,7 @@ function roundedCoordKey(lat: number, lon: number): string {
 /** Border-label colors for a country that's still in play, one you found, and
  * one you revealed -- the same three states the answer box uses. */
 function labelClass(outcome: 'solved' | 'revealed' | undefined): string {
-  if (outcome === 'solved') return 'bg-emerald-100/90 text-emerald-800';
+  if (outcome === 'solved') return 'bg-teal-100/90 text-teal-800';
   if (outcome === 'revealed') return 'bg-amber-100/90 text-amber-800';
   return 'bg-white/85 text-zinc-800';
 }
