@@ -83,24 +83,30 @@ export default function GameHeader({
         </span>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={onRecenter} className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
-          Recenter
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onRecenter}
+          title="Snap back to the pinpointed view of this round's city"
+          className="rounded border border-sky-400/40 bg-sky-500/15 px-3 py-1.5 text-sky-200 hover:bg-sky-500/25"
+        >
+          🎯 Recenter
         </button>
         <button
           onClick={onReveal}
           disabled={revealDisabled}
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20 disabled:opacity-30"
+          title="Give up on this round and show the answer"
+          className="rounded border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-amber-200 hover:bg-amber-500/25 disabled:opacity-30"
         >
-          Reveal
+          👁 Reveal
         </button>
+        <span className="h-6 w-px bg-white/15" aria-hidden="true" />
         <button
           onClick={onReport}
           disabled={reportPending}
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round and excludes the city from all future games"
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20 disabled:opacity-30"
+          className="rounded border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-red-200 hover:bg-red-500/25 disabled:opacity-30"
         >
-          Report Round
+          🚩 Report Round
         </button>
       </div>
     </div>

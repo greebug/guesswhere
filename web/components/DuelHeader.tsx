@@ -76,17 +76,22 @@ export default function DuelHeader({
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={onRecenter} className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
-          Recenter
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onRecenter}
+          title="Snap back to the pinpointed view of this round's city"
+          className="rounded border border-sky-400/40 bg-sky-500/15 px-3 py-1.5 text-sky-200 hover:bg-sky-500/25"
+        >
+          🎯 Recenter
         </button>
+        <span className="h-6 w-px bg-white/15" aria-hidden="true" />
         <button
           onClick={onReport}
           disabled={hasReported || reportDisabled}
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round once every player has reported it, and excludes the city from all future games"
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20 disabled:opacity-30"
+          className="rounded border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-red-200 hover:bg-red-500/25 disabled:opacity-30"
         >
-          {hasReported ? `Reported (${reportedBy.length}/${totalPlayers})` : 'Report Round'}
+          {hasReported ? `🚩 Reported (${reportedBy.length}/${totalPlayers})` : '🚩 Report Round'}
         </button>
       </div>
     </div>
