@@ -377,6 +377,64 @@ answer-pin marker, positioned off-view and clipped by its own `overflow-hidden`;
 `document.documentElement.scrollWidth` stays correct. Check page scrollWidth, or
 skip nodes inside a clipping ancestor.
 
+## Blurry satellite imagery: the half-zoom tile cliff (2026-07-25)
+
+Jesse reported the main map "super blurry at some zoom levels", new since 07-24, and
+correctly ruled out the imagery himself — `tools/city-overlay.html` at the same
+coordinates looked crisp off the same Mapbox source. He was right that it was us.
+
+**The mechanism, and it is worth internalizing before touching `MainMap.tsx` again:**
+`satellite-v9`'s raster source is declared `tileSize: 256` with `roundZoom: true` (read
+off the live map object, not assumed — check it again rather than trusting this line).
+So the tile level actually drawn is `round(zoom + 1)`, and the stretch applied to each
+tile is `2^((zoom + 1) − that level)`. **That is a 2x resolution cliff at every half
+zoom.** Measured live at one city:
+
+| map zoom | tile level | drawn at |
+|---|---|---|
+| 11.49 | 12 | **1.404x** (stretched — blurry) |
+| 11.51 | 13 | **0.712x** (supersampled — crisp) |
+
+0.02 of zoom for a 2x swing. And the game opens at *exactly* `minZoom` (`fitBounds` and
+`applyWideZoomFloor` are handed the same box), so whichever side of the cliff a round
+lands on is what you stare at for the entire round — there is no zooming out of it.
+
+**What pushed it over:** `fffed9b` (07-24 23:02, "Reframe map view/pan box to 16:9").
+The old box was 2.35:1 — *wider* than any maximized desktop window, so **width** was the
+binding constraint in `cameraForBounds`. The 16:9 box is *narrower* than a maximized
+window, so **height** binds instead. That moves the fitted zoom about −0.1, which at some
+latitudes is enough to fall off the cliff. At 1920x1080 maximized, latitude ~20°:
+z11.551 → tiles at z13, 0.73x **became** z11.451 → tiles at z12, 1.37x. Same imagery,
+1.87x fewer real pixels. It is latitude- and window-height-dependent, which is exactly
+why it looked like "some cities and some zoom levels" rather than everything.
+
+**The fix (shipped): `transformRequest` upgrades satellite tiles to `@2x`.** A 512px
+image for the same 256-unit tile — precisely what GL JS does by itself on a retina
+display — so the worst case becomes 0.707x of native and the cliff stops being visible.
+Verified in the running app: the transform is installed, `/v4/mapbox.satellite/12/3221/
+1771.webp` → `...1771@2x.webp`, style URLs untouched, and that `@2x` URL really does
+return 512x512 (fetched both, compared `naturalWidth`).
+
+**This does NOT break the billing invariant, and here is the proof rather than the
+assertion:** the rewritten URL still carries both `access_token` *and* `sku`. The `sku`
+is GL JS's map-load session token — we are rewriting a URL GL JS itself generated for
+the `mapbox://` source, not constructing our own endpoint, so it stays on Map Loads and
+never touches the Raster Tiles API that `tools/imagery-compare.html` warns about. Same
+tile count, ~2-3x the bytes. **If you ever replace this with a self-declared raster
+source and explicit `tiles: [...]` URLs, that invariant *does* break.**
+
+**Second, separate bug found while measuring, NOT yet fixed:** the "25 miles wide"
+framing spec isn't what reaches the screen. Because the 16:9 box makes height the binding
+constraint, a maximized 1920x1080 window shows **~31 miles across**, not 25 — and that's
+*wider* than the old framing's 29.3. The box only delivers 25mi on a window that is
+exactly 16:9 or narrower. Jesse knows; he chose to fix the blur first.
+
+**A note on method, because the arithmetic here is easy to get wrong by reimplementing
+it:** the `cameraForBounds` model was validated by computing a zoom by hand and checking
+it against the real map object (11.156 at lat 23.4 in a 1278x1219 container — exact
+match) *before* any conclusion was drawn from it. Do that again rather than trusting a
+from-scratch mercator derivation.
+
 ## OPEN RIGHT NOW — visual review pending (2026-07-25)
 
 The "night atlas" redesign shipped (`66801f6`) and **nobody has looked at it yet** —

@@ -21,6 +21,53 @@ const PINPOINT_WIDTH_KM = 3;
 const PINPOINT_HEIGHT_KM = 1.5;
 const MAX_ZOOM = 18; // matches measured Esri/Mapbox fidelity ceiling in most regions
 
+// satellite-v9's raster source is declared `tileSize: 256` with `roundZoom`
+// (read off the live map, not assumed), so the tile level it actually draws is
+// `round(zoom + 1)`. That puts a hard 2x cliff at every half zoom: landing just
+// below one stretches each 256px tile over as much as 362px (2^0.5), landing
+// just above it packs the same tile into 181px. Measured on the real map at one
+// city: zoom 11.49 draws tiles at 1.404x, zoom 11.51 at 0.712x -- a 0.02 change
+// in zoom for a 2x change in effective resolution.
+//
+// The game opens at exactly minZoom (fitBounds and setMinZoom below are handed
+// the same box), and the fitted zoom moves continuously with latitude and the
+// container's size -- so which side of the cliff a round lands on is
+// effectively arbitrary, and whichever side it is, you look at it for the whole
+// round. That was reported as "super blurry at some zoom levels", and it is.
+//
+// Asking for the @2x variant returns a 512px image for the same 256-unit tile,
+// which is precisely what GL JS does on its own on a retina display. Twice the
+// source pixels means the worst case becomes 0.707x of native instead of
+// 1.414x, and the cliff stops being visible at all.
+//
+// BILLING: this rewrites a URL GL JS itself generated for the `mapbox://`
+// source -- same tile count, same map load. It is NOT the Raster Tiles API
+// path that CLAUDE.md's invariant forbids; nothing here constructs its own
+// tile endpoint. The only cost is ~2-3x the bytes per tile.
+const SATELLITE_TILE_PATH = /^\/v4\/mapbox\.satellite\/\d+\/\d+\/\d+(\.\w+)$/;
+
+// Every path returns `{ url }` rather than `undefined` for "leave it alone":
+// GL JS treats a missing return as "unchanged" at runtime, but its
+// RequestTransformFunction type requires RequestParameters, and returning the
+// URL untouched means exactly the same thing without an assertion.
+function upgradeToRetinaTile(url: string, resourceType?: string) {
+  if (resourceType !== 'Tile') return { url };
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { url };
+  }
+  const match = SATELLITE_TILE_PATH.exec(parsed.pathname);
+  // A non-match also covers the already-@2x case a retina display produces:
+  // `1771@2x.webp` can't satisfy `\d+(\.\w+)$`, so those are left alone rather
+  // than turned into a nonexistent @2x@2x tile.
+  if (!match) return { url };
+  const ext = match[1];
+  parsed.pathname = `${parsed.pathname.slice(0, -ext.length)}@2x${ext}`;
+  return { url: parsed.toString() };
+}
+
 // Recomputes and reapplies the "can't zoom out past 27km wide" floor for the
 // container's CURRENT size. Must be re-run on every resize, not just once --
 // see the `resize` listener below for why.
@@ -83,6 +130,7 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
       attributionControl: false,
       dragRotate: false,
       touchPitch: false,
+      transformRequest: upgradeToRetinaTile,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
     mapRef.current = map;
