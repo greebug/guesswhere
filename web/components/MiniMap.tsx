@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { buildMinimapStyle } from '@/lib/minimapStyle';
+import { buildMinimapStyle, ELIMINATED_SOURCE_ID } from '@/lib/minimapStyle';
 import { api } from '@/lib/basePath';
 
 // Every round starts on the same neutral world view, unrelated to the
@@ -34,6 +34,13 @@ function roundedCoordKey(lat: number, lon: number): string {
 
 type Layer = 'map' | 'elevation';
 
+interface CountryRef {
+  iso2: string;
+  name: string;
+}
+
+const EMPTY_COUNTRIES: CountryRef[] = [];
+
 interface MiniMapProps {
   lat: number;
   lon: number;
@@ -42,9 +49,19 @@ interface MiniMapProps {
   // so the player can see where it actually was. Never set for a correct
   // guess: they already found it themselves.
   showAnswer?: boolean;
+  /** Countries already used up by a settled round, so they can't be the
+   * answer to any remaining one. Solo only -- duels draw rounds one at a time
+   * with no country-uniqueness rule, so nothing is ever eliminated there. */
+  eliminated?: CountryRef[];
 }
 
-export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: MiniMapProps) {
+export default function MiniMap({
+  lat,
+  lon,
+  roundKey,
+  showAnswer = false,
+  eliminated = EMPTY_COUNTRIES,
+}: MiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -56,7 +73,12 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
   // view, or null when no border is on screen (or both sample points landed
   // in the same country). Positions are fixed screen fractions, not stored
   // here -- see BORDER_SAMPLE_FRACTIONS.
-  const [borderLabels, setBorderLabels] = useState<{ a: string; b: string } | null>(null);
+  const [borderLabels, setBorderLabels] = useState<{ a: CountryRef; b: CountryRef } | null>(null);
+  // Country outlines already downloaded, keyed by ISO code. The endpoint marks
+  // them immutable so the browser would serve repeats from cache anyway; this
+  // just avoids the round trip entirely.
+  const shapeCache = useRef(new Map<string, GeoJSON.Feature>());
+  const eliminatedIso = eliminated.map((c) => c.iso2).join(',');
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -94,7 +116,7 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
     // queryRenderedFeatures reads from the WebGL render tree, which is only
     // populated after a real paint -- unverifiable here, and a real user's
     // two country lookups differing is just as reliable a signal.)
-    const countryCache = new Map<string, string | null>();
+    const countryCache = new Map<string, CountryRef | null>();
     let requestSeq = 0;
     const updateBorderLabels = async () => {
       const container = containerRef.current;
@@ -109,26 +131,25 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
       const keys = lonLats.map((ll) => roundedCoordKey(ll.lat, ll.lng));
 
       const seq = ++requestSeq;
-      let names: (string | null)[];
+      let found: (CountryRef | null)[];
       if (keys.every((k) => countryCache.has(k))) {
-        names = keys.map((k) => countryCache.get(k) ?? null);
+        found = keys.map((k) => countryCache.get(k) ?? null);
       } else {
         try {
           const qs = lonLats.map((ll) => `point=${ll.lat.toFixed(3)},${ll.lng.toFixed(3)}`).join('&');
           const res = await fetch(api(`/api/geo/country?${qs}`));
           if (!res.ok) return;
           const data = await res.json();
-          names = data.countries as (string | null)[];
-          keys.forEach((k, i) => countryCache.set(k, names[i]));
+          found = data.countries as (CountryRef | null)[];
+          keys.forEach((k, i) => countryCache.set(k, found[i]));
         } catch {
           return; // transient network blip -- the next moveend tries again
         }
       }
       if (seq !== requestSeq) return; // a newer move already superseded this one
 
-      setBorderLabels(
-        names[0] && names[1] && names[0] !== names[1] ? { a: names[0], b: names[1] } : null
-      );
+      const [a, b] = found;
+      setBorderLabels(a && b && a.iso2 !== b.iso2 ? { a, b } : null);
     };
     map.on('moveend', updateBorderLabels);
 
@@ -174,6 +195,56 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
     }
   }, [showAnswer, lat, lon, roundKey]);
 
+  // Feeds the eliminated-country tint. The source is declared empty in the
+  // style (see buildMinimapStyle) and filled in here as rounds settle.
+  //
+  // `style.load` matters: setData on a source the style hasn't finished
+  // loading is a no-op, and the very first round can easily settle before
+  // then on a slow connection. Re-running on that event makes the whole thing
+  // self-healing rather than dependent on the race going the right way.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    let cancelled = false;
+
+    const codes = eliminatedIso ? eliminatedIso.split(',') : [];
+
+    const apply = () => {
+      const source = map.getSource(ELIMINATED_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+      if (!source) return;
+      const features = codes
+        .map((iso) => shapeCache.current.get(iso))
+        .filter((f): f is GeoJSON.Feature => !!f);
+      source.setData({ type: 'FeatureCollection', features });
+    };
+
+    (async () => {
+      const missing = codes.filter((iso) => !shapeCache.current.has(iso));
+      await Promise.all(
+        missing.map(async (iso) => {
+          try {
+            const res = await fetch(api(`/api/geo/shape?iso=${iso}`));
+            // A 404 is normal for the handful of territories Natural Earth
+            // folds into their parent country -- see shapeForIso(). Nothing
+            // to draw, and nothing to retry.
+            if (!res.ok) return;
+            shapeCache.current.set(iso, await res.json());
+          } catch {
+            // Transient: the next round to settle re-runs this effect.
+          }
+        })
+      );
+      if (cancelled) return;
+      apply();
+    })();
+
+    map.on('style.load', apply);
+    return () => {
+      cancelled = true;
+      map.off('style.load', apply);
+    };
+  }, [eliminatedIso]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -203,22 +274,28 @@ export default function MiniMap({ lat, lon, roundKey, showAnswer = false }: Mini
         }`}
       >
         <div ref={containerRef} className="h-full w-full" />
-        {borderLabels && (
-          <>
+        {/* An eliminated country's label is muted to match its tint. At the
+            zooms where these labels appear the wash is already faint, and
+            "was the last one in India or Pakistan?" is exactly the question
+            you ask with a border on screen -- so the answer is put on the
+            label itself rather than left to a shade of grey. */}
+        {borderLabels &&
+          ([borderLabels.a, borderLabels.b] as const).map((country, i) => (
             <div
-              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-zinc-800 shadow"
-              style={{ left: `${BORDER_SAMPLE_POINTS[0].x * 100}%`, top: `${BORDER_SAMPLE_POINTS[0].y * 100}%` }}
+              key={country.iso2}
+              className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap shadow ${
+                eliminated.some((c) => c.iso2 === country.iso2)
+                  ? 'bg-zinc-300/80 text-zinc-500'
+                  : 'bg-white/85 text-zinc-800'
+              }`}
+              style={{
+                left: `${BORDER_SAMPLE_POINTS[i].x * 100}%`,
+                top: `${BORDER_SAMPLE_POINTS[i].y * 100}%`,
+              }}
             >
-              {borderLabels.a}
+              {country.name}
             </div>
-            <div
-              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-zinc-800 shadow"
-              style={{ left: `${BORDER_SAMPLE_POINTS[1].x * 100}%`, top: `${BORDER_SAMPLE_POINTS[1].y * 100}%` }}
-            >
-              {borderLabels.b}
-            </div>
-          </>
-        )}
+          ))}
         <div className="absolute top-1 left-1 z-10 flex gap-1 text-xs">
           {(['map', 'elevation'] as const).map((l) => (
             <button

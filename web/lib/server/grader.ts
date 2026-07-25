@@ -54,10 +54,13 @@ export interface Grader {
   getRoundCity(cityId: number): RoundCity | null;
   getCityRow(cityId: number): CityRow | null;
   grade(cityId: number, guess: string): { correct: boolean; canonicalName: string | null };
-  /** "City, Country" -- for showing the answer when the player DIDN'T get it
-   * (reveal / duel round timeout). Never used for a correct guess: the
-   * player already knew the country then, only the exact spelling was in
-   * question, and `grade()`'s canonicalName already covers that case. */
+  /** "City, Country" -- the display form of an answer, once the round is over
+   * one way or another: revealed, timed out in a duel, or guessed correctly.
+   * (Correct guesses used to show the bare city name on the grounds that the
+   * player already knew the country; in practice, paging back through ten
+   * solved rounds to work out which countries are used up is exactly when you
+   * want it spelled out. Typing it is still never required -- `grade()` is
+   * untouched.) */
   revealWithCountry(cityId: number): string | null;
   allCities(): CityRow[];
 }

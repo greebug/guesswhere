@@ -40,7 +40,13 @@ export async function POST(
   const result = grader.grade(round.cityId, guess);
   if (result.correct) {
     round.solved = true;
-    round.canonicalName = result.canonicalName;
+    // "City, Country" even on a correct guess. The country was never required
+    // to type and still isn't -- grade() accepts the bare city name exactly as
+    // before -- but showing it makes a solved round readable at a glance when
+    // paging back through the ten, which is the whole point of being able to
+    // page back. It also feeds the eliminated-country tint's rationale: the
+    // player can see which country they just knocked out.
+    round.canonicalName = grader.revealWithCountry(round.cityId) ?? result.canonicalName;
   }
   // A wrong guess still moved the clock, so this saves either way.
   finalizeIfComplete(session, grader);
@@ -48,7 +54,7 @@ export async function POST(
 
   return NextResponse.json({
     correct: result.correct,
-    canonicalName: result.correct ? result.canonicalName : null,
+    canonicalName: result.correct ? round.canonicalName : null,
     correctCount: correctCount(session),
     complete: isComplete(session),
   });

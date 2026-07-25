@@ -15,10 +15,18 @@ from the repo root), then from `web/`:
 node scripts/verify-game.mjs     # 44 checks: auth, active-time accrual, leaderboards, prune safety
 node scripts/verify-email.mjs    # 24 checks: verify/reset token handling
 node --experimental-strip-types scripts/verify-appurl.mjs   # 12 checks: emailed-link origin resolution
+node scripts/verify-eliminated.mjs   # 11 checks: country-on-answer, the eliminated-country hint, one-country-per-game
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 
-`verify-game.mjs` and `verify-email.mjs` read `CITIES_DB` and `GAME_DB_PATH` from
+`VERIFY_BASE_URL` must include the `/guesswhere` base path — every route lives under it
+since the domain migration, so the default `http://localhost:3000` alone 404s:
+
+```bash
+VERIFY_BASE_URL=http://localhost:3000/guesswhere node scripts/verify-eliminated.mjs
+```
+
+`verify-game.mjs`, `verify-email.mjs` and `verify-eliminated.mjs` read `CITIES_DB` and `GAME_DB_PATH` from
 `web/.env.local` (same values the app uses). They read the SQLite files **directly** only
 to look up answers — the API never exposes them, which is the whole point — and they
 create disposable accounts named `alice_*` / `mailer_*` / `t_*`. Run
@@ -36,6 +44,16 @@ real, legitimately charged to round 0 (the player is looking at it while the pag
 and on a **cold** server it includes building the ~11k-city grader index plus the first
 `VACUUM` — which is why an un-baselined assertion looked like ~800ms of drift the first
 time it ran. It isn't drift.
+
+## The other check worth understanding
+
+`verify-eliminated.mjs` plays 40 games at a 50,000 floor and asserts no two rounds share a
+country — measured on the ISO code, not the country *string*. Those differ more often than
+you'd expect: the corpus carries two spellings for 31 countries (GHSL's "United States of
+America" alongside GeoNames' "United States", and so on), and the old string-keyed rule let
+~12% of 50k-floor games quietly contain two cities from the same real country. That was
+harmless-ish on its own and became load-bearing the moment the minimap started greying out
+eliminated countries — a wrong "India is out of play" is worse than no hint at all.
 
 ## What these do NOT cover
 

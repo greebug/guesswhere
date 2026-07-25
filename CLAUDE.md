@@ -188,6 +188,52 @@ grading, the leaderboard API, `rivers.json`, asset prefixing (no un-prefixed
 `/_next/` refs remain), and Blitz's socket.io handshake including the WebSocket
 upgrade. **Not yet deployed** — nothing has been pushed.
 
+## Eliminated-country hints + island markers (2026-07-25)
+
+Three things Jesse asked for after playing, plus one real bug found underneath them:
+
+- **A correct guess now shows "City, Country"**, matching reveal. Typing the country is
+  still never required — `grade()` is untouched; only the *displayed* name changed
+  (`guess/route.ts` now calls `revealWithCountry`). The point is paging back through ten
+  solved rounds and being able to read off which countries are used up.
+- **Countries already used are tinted out on the minimap** (solo only). A settled round's
+  country can never come up again, so it's dead space. `GET /api/game/[id]/eliminated`
+  returns the countries of **settled rounds only** — for an unsettled round that would be
+  a straight spoiler, and at the last unsolved round "the one country not yet greyed"
+  would name the answer outright. Shapes come one-per-request from
+  `GET /api/geo/shape?iso=XX` marked `immutable`, so the browser's own cache dedupes them
+  across rounds and games (a batched endpoint would re-download Canada ten times a game).
+  The tint fades with zoom but never to zero — "was the last one India or Pakistan?" is a
+  question you ask zoomed in. The border labels mute to match.
+  **Duels deliberately have none of this**: duel rounds are drawn one at a time with no
+  country-uniqueness rule, so a used country tells you nothing there.
+- **Small isolated islands get a faint marker ring** below z6-z9 (`islands.json`, see
+  Layout). Unnamed on purpose.
+
+**The bug: "no two cities from the same country" was not actually holding.** It keyed on
+the raw `country` string, and the corpus carries TWO spellings for 31 countries — GHSL's
+UN long forms ("United States of America", "Viet Nam", "Russian Federation") against the
+GeoNames layer's short ones ("United States", "Vietnam", "Russia"). Measured against the
+real corpus: **~12% of 50,000-floor games contained two cities from the same real
+country** (7% at 100k, 1.3% at 500k). `lib/server/countryCode.ts` now supplies an
+ISO-based `countryKey()` and selection uses it. This had to be fixed for the tint to be
+truthful — a wrong "India is out of play" is worse than no hint — but it was a real
+pre-existing bug either way. `web/scripts/verify-eliminated.mjs` (11 checks) covers all
+of it.
+
+Note `iso2` is missing on 92 of 18,749 playable cities, in 11 country names;
+`NULL_ISO_FALLBACK` in `countryCode.ts` maps exactly those. And Natural Earth folds
+France's overseas departments into France, so those 17 cities (Réunion, Guadeloupe,
+Martinique, Mayotte, French Guiana) go untinted rather than tinting mainland France —
+`shapeForIso()` returns null and the client treats a 404 as "nothing to draw".
+
+**Verified computationally, not visually.** The style object validates clean against
+maplibre's own style-spec validator, layer order and paint expressions confirmed, and the
+API behaviour is covered by the script above. The sandbox browser's `document.hidden`
+throttle stops MapLibre from ever parsing the style, so **nobody has looked at the actual
+tint or island markers on screen yet** — colors and opacities are a first guess and may
+want tuning.
+
 ## OPEN RIGHT NOW — read this first (as of 2026-07-23)
 
 Everything from the 2026-07-22 post-`76b8607` polish pass (end-of-game report rework,
@@ -402,6 +448,16 @@ report-round exclusions (see below) — not bulk geodata. Don't gitignore it.
   fly-to-city buttons, plus a name search and one-click "open in Google Maps" links for
   cross-referencing against ground truth. Same shared Mapbox-token localStorage key as
   `box-overlay.html`.
+- `tools/build-country-shapes.js` — regenerates `web/data/country-shapes.json` (Natural
+  Earth 50m admin-0, stripped to `{iso2, name, geometry}` and simplified). Server-side
+  only; feeds both the minimap's border labels and the eliminated-country tint. It
+  replaced the old 110m, name-only `country-borders.json`: the corpus's country *strings*
+  come from two disagreeing upstream sources, so ISO codes are the only reliable join.
+- `tools/build-islands.js` — regenerates `web/public/islands.json`, a marker point per
+  small isolated island (source: the Natural Earth 10m coastline already in
+  `C:\geodata\coastline\`). Small Pacific islands are a single pixel at world zoom, which
+  made finding e.g. Guam a needle-in-a-haystack; these are deliberately unnamed markers,
+  since naming islands would start encroaching on the answer key.
 - `web/data/reported-cities.json` — Report Round blocklist. City ids only, no PII. Global
   across all games, persisted across restarts. Grows slowly; a flat file is intentional,
   not a placeholder for "add a real DB later."

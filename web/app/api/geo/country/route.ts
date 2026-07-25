@@ -7,6 +7,11 @@ const MAX_POINTS = 6;
 
 // Batched (repeated ?point=lat,lon) so the minimap can resolve both sides of
 // a border in one round trip instead of one request per point.
+//
+// Each entry is {iso2, name} rather than a bare name: the minimap mutes the
+// label of a country the player has already eliminated, and that comparison
+// has to be made on the ISO code -- the game's own country strings and
+// Natural Earth's don't agree on spelling (see lib/server/countryCode.ts).
 export async function GET(request: NextRequest) {
   const points = request.nextUrl.searchParams.getAll('point');
   if (points.length === 0 || points.length > MAX_POINTS) {

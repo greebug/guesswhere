@@ -10,6 +10,9 @@ import { api } from '@/lib/basePath';
 export const TILES_SOURCE_ID = 'protomaps';
 export const HILLSHADE_SOURCE_ID = 'terrain';
 export const RIVERS_SOURCE_ID = 'ne-rivers';
+export const ISLANDS_SOURCE_ID = 'ne-islands';
+export const ELIMINATED_SOURCE_ID = 'eliminated-countries';
+export const ELIMINATED_LAYER_ID = 'eliminated_countries_tint';
 // Served from web/public/rivers.json -- Natural Earth's ne_50m_rivers_lake_centerlines,
 // trimmed to River features only, {min_zoom, geometry}. See buildRiverOverlayLayers()
 // below for why this exists at all.
@@ -29,6 +32,14 @@ const RIVERS_URL = api('/rivers.json');
 // Ending the overlay earlier leaves a small gap with no river shown rather
 // than two slightly different lines shown at once -- the better tradeoff.
 const RIVER_OVERLAY_MAXZOOM = 7;
+// Marker points for small, isolated islands -- see tools/build-islands.js for
+// what qualifies and why. Same basePath caveat as RIVERS_URL.
+const ISLANDS_URL = api('/islands.json');
+// An island bigger than this draws a shape you can actually see once you're
+// zoomed in a little, so its marker bows out early; anything smaller keeps
+// its marker most of the way in. Matches MAX_SPAN_KM's spirit in the builder,
+// but this is the "readable unaided" line, not the "worth marking at all" one.
+const ISLAND_SELF_EVIDENT_SPAN_KM = 40;
 // AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
 // Stands in for phase 1's deferred dedicated elevation download.
 const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
@@ -85,6 +96,51 @@ const URBAN_FABRIC_LAYER: LayerSpecification = {
     'fill-color': '#d6d6d6',
   },
 };
+
+// A country whose city has already been found (or revealed) can't come up
+// again -- solo games never repeat a country -- so it's dead space for every
+// remaining round. This washes it out just enough to register peripherally:
+// "don't bother sweeping India again," without ever competing with the actual
+// map for attention. Deliberately a cool grey over the warm tan earth, since
+// desaturation is what "out of play" reads as; deliberately strongest at the
+// zooms where you're scanning whole continents and nearly gone by the time
+// you're reading city shapes, where it would just be in the way. It also
+// stays *slightly* present at every zoom on purpose: "wait, was the last one
+// in India or Pakistan?" is a question you ask while zoomed in.
+const ELIMINATED_TINT_LAYER: LayerSpecification = {
+  id: ELIMINATED_LAYER_ID,
+  type: 'fill',
+  source: ELIMINATED_SOURCE_ID,
+  paint: {
+    'fill-color': '#5b6b7a',
+    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.22, 5, 0.2, 8, 0.1, 11, 0.06],
+  },
+};
+
+// Faint "there is land here" rings. Sized and faded so they hand off to the
+// island's real drawn shape rather than sitting on top of it: markers for
+// islands big enough to recognize unaided disappear by z6, while the ones
+// that are still a single pixel at z6 keep theirs until z9.
+const ISLAND_MARKER_LAYER = {
+  id: 'island_markers',
+  type: 'circle',
+  source: ISLANDS_SOURCE_ID,
+  paint: {
+    'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2.5, 4, 4.5, 8, 6],
+    'circle-color': MINIMAP_THEME_OVERRIDES.earth,
+    'circle-stroke-width': 1,
+    'circle-stroke-color': '#5f8ea3',
+    // Both opacities share one curve so the ring and its fill never come
+    // apart mid-fade. The z6 stop is where the two size classes diverge.
+    'circle-opacity': islandFadeCurve(0.75),
+    'circle-stroke-opacity': islandFadeCurve(0.9),
+  },
+} as unknown as LayerSpecification;
+
+function islandFadeCurve(peak: number) {
+  const smallOnly = ['case', ['<', ['get', 'span'], ISLAND_SELF_EVIDENT_SPAN_KM], peak, 0];
+  return ['interpolate', ['linear'], ['zoom'], 0, peak, 5, peak, 6, smallOnly, 9, 0];
+}
 
 /** Inserts one or more layers right before the first layer with the given id
  * -- used to slot the urban-fabric fill in under the specific-purpose
@@ -157,6 +213,15 @@ export function buildMinimapStyle(
   const sources: StyleSpecification['sources'] = {
     [TILES_SOURCE_ID]: { type: 'vector', url: tilesJsonUrl },
     [RIVERS_SOURCE_ID]: { type: 'geojson', data: RIVERS_URL },
+    [ISLANDS_SOURCE_ID]: { type: 'geojson', data: ISLANDS_URL },
+    // Starts empty and is filled in at runtime as rounds settle -- see
+    // MiniMap's setData call. Declaring it here rather than adding the source
+    // on demand means the layer's position in the stack is fixed by the style
+    // itself, instead of depending on when the first round happens to settle.
+    [ELIMINATED_SOURCE_ID]: {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    },
   };
   if (withHillshade) {
     sources[HILLSHADE_SOURCE_ID] = {
@@ -169,14 +234,22 @@ export function buildMinimapStyle(
   }
 
   const baseLayers = thickenCountryBorders(
+    // The tint and the island markers both slot in just under the country
+    // boundary lines: over every land/landuse fill (so the wash actually
+    // covers the terrain it's dimming, and an island marker isn't hidden by
+    // the sea), but under borders and every label, which have to stay crisp.
     insertBefore(
       insertBefore(
-        layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
-        'landuse_park',
-        URBAN_FABRIC_LAYER
+        insertBefore(
+          layersWithPartialCustomTheme(TILES_SOURCE_ID, 'light', MINIMAP_THEME_OVERRIDES, 'en'),
+          'landuse_park',
+          URBAN_FABRIC_LAYER
+        ),
+        'water_river',
+        buildRiverOverlayLayers()
       ),
-      'water_river',
-      buildRiverOverlayLayers()
+      'boundaries_country',
+      [ELIMINATED_TINT_LAYER, ISLAND_MARKER_LAYER]
     )
   );
 

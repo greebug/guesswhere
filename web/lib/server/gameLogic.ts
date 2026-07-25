@@ -1,4 +1,5 @@
 import type { CityRow, Grader } from './grader';
+import { countryKey } from './countryCode';
 import { insertGameResult } from './gameDb';
 
 const ROUNDS_PER_GAME = 10;
@@ -38,6 +39,10 @@ function shuffle<T>(arr: T[]): T[] {
  * above roughly a 15,000,000 floor, where just 9 countries qualify), country
  * repeats are allowed as a last resort rather than silently lowering the
  * floor -- the floor is a promise to the player and takes priority.
+ *
+ * `excludeCountries` holds countryKey() values, NOT raw country strings --
+ * see lib/server/countryCode.ts for why the raw string can't be trusted as an
+ * identity here.
  */
 function pickCitiesAtOrAbove(
   minPopulation: number,
@@ -50,9 +55,10 @@ function pickCitiesAtOrAbove(
   const picked: CityRow[] = [];
   const usedCountries = new Set(excludeCountries);
   for (const c of candidates) {
-    if (usedCountries.has(c.country)) continue;
+    const key = countryKey(c);
+    if (usedCountries.has(key)) continue;
     picked.push(c);
-    usedCountries.add(c.country);
+    usedCountries.add(key);
     if (picked.length === count) return picked;
   }
 

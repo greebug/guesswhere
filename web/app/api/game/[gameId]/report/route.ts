@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { getGame, saveGame } from '@/lib/server/gameStore';
 import { accrue, pickReplacementCity } from '@/lib/server/gameLogic';
+import { countryKey } from '@/lib/server/countryCode';
 import { getReportedIds, addReportedId } from '@/lib/server/reportedCities';
 
 export const runtime = 'nodejs';
@@ -38,7 +39,10 @@ export async function POST(
   const otherCountries = new Set(
     session.rounds
       .filter((_, i) => i !== roundIndex)
-      .map((r) => grader.getCityRow(r.cityId)?.country)
+      .map((r) => {
+        const city = grader.getCityRow(r.cityId);
+        return city ? countryKey(city) : null;
+      })
       .filter((c): c is string => !!c)
   );
 

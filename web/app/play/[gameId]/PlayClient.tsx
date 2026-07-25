@@ -18,6 +18,11 @@ interface RoundView {
   canonicalName: string | null;
 }
 
+interface CountryRef {
+  iso2: string;
+  name: string;
+}
+
 interface GameView {
   gameId: string;
   targetPopulation: number;
@@ -40,6 +45,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const [summary, setSummary] = useState<GameSummary | null>(null);
   // Total banked on the server, plus a local ticker so the header clock moves
   // between heartbeats rather than jumping every 10 seconds.
+  const [eliminated, setEliminated] = useState<CountryRef[]>([]);
   const [bankedMs, setBankedMs] = useState(0);
   const [tickBase, setTickBase] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -105,6 +111,33 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     const interval = setInterval(() => focus(currentIndex), HEARTBEAT_MS);
     return () => clearInterval(interval);
   }, [game, currentIndex, focus, summary]);
+
+  // Which countries are out of play, for the minimap's greyed-out tint. Keyed
+  // on the settled/unsettled pattern rather than a round count, since Report
+  // Round can un-settle a slot as well as settle one, and the server is the
+  // only side that knows any round's country -- deliberately, since for an
+  // unsettled round that's the answer.
+  const settledKey = game
+    ? game.rounds.map((r) => (r.solved || r.revealed ? '1' : '0')).join('')
+    : '';
+  useEffect(() => {
+    if (!settledKey.includes('1')) {
+      setEliminated([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(api(`/api/game/${gameId}/eliminated`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setEliminated(data.countries as CountryRef[]);
+      })
+      .catch(() => {
+        // Purely a hint layer -- a failed fetch just leaves the map untinted.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, settledKey]);
 
   // Local ticker for the header clock only; the server remains the authority.
   useEffect(() => {
@@ -216,7 +249,13 @@ export default function PlayClient({ gameId }: { gameId: string }) {
       <div className="relative flex-1">
         <MainMap ref={mainMapRef} lat={round.lat} lon={round.lon} roundKey={round.index} />
 
-        <MiniMap lat={round.lat} lon={round.lon} roundKey={round.index} showAnswer={round.revealed} />
+        <MiniMap
+          lat={round.lat}
+          lon={round.lon}
+          roundKey={round.index}
+          showAnswer={round.revealed}
+          eliminated={eliminated}
+        />
 
         <div className="absolute bottom-6 left-1/2 z-30 w-full max-w-2xl -translate-x-1/2 px-4">
           <AnswerBox
