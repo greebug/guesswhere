@@ -17,7 +17,12 @@
 // It is a set of LineStrings; a CLOSED one is an island's outline, an open one
 // is a continental coast segment cut at the data's edges.
 //
-// Two filters decide what gets a marker, and both matter:
+// The `span` property (longest dimension, km) is what the style buckets on:
+// a marker is only drawn across the zoom band where its island is too small
+// to see but big enough to be hunting for. See ISLAND_BUCKETS in
+// web/lib/minimapStyle.ts -- the two files have to be read together.
+//
+// Two filters decide what gets a marker at all, and both matter:
 //   * size    -- only islands too small to read at low zoom. Anything bigger
 //                already draws its own recognizable shape.
 //   * isolation -- only islands well away from a major landmass. Without this
@@ -35,9 +40,9 @@ const OUT_PATH = path.join(__dirname, '..', 'web', 'public', 'islands.json');
 // Islands whose longest dimension exceeds this draw a shape you can see and
 // identify unaided (Sicily, Hokkaido, Iceland) -- no marker needed.
 const MAX_SPAN_KM = 300;
-// Below this, a "ring" is a rock or sandbar with nothing on it. It also cuts
-// the marker count roughly in half.
-const MIN_SPAN_KM = 2;
+// Below this, a "ring" is a rock or sandbar -- too small to hold a town at
+// the game's 25,000 population floor, and pure clutter on the map.
+const MIN_SPAN_KM = 3;
 // A landmass this big is what an island is measured as "near" or "far" from.
 const MAINLAND_SPAN_KM = 400;
 // Closer than this to a mainland and the island is findable by following the

@@ -35,11 +35,6 @@ const RIVER_OVERLAY_MAXZOOM = 7;
 // Marker points for small, isolated islands -- see tools/build-islands.js for
 // what qualifies and why. Same basePath caveat as RIVERS_URL.
 const ISLANDS_URL = api('/islands.json');
-// An island bigger than this draws a shape you can actually see once you're
-// zoomed in a little, so its marker bows out early; anything smaller keeps
-// its marker most of the way in. Matches MAX_SPAN_KM's spirit in the builder,
-// but this is the "readable unaided" line, not the "worth marking at all" one.
-const ISLAND_SELF_EVIDENT_SPAN_KM = 40;
 // AWS's public Terrarium-encoded terrain tiles -- free, no key, no account.
 // Stands in for phase 1's deferred dedicated elevation download.
 const TERRAIN_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
@@ -101,45 +96,93 @@ const URBAN_FABRIC_LAYER: LayerSpecification = {
 // again -- solo games never repeat a country -- so it's dead space for every
 // remaining round. This washes it out just enough to register peripherally:
 // "don't bother sweeping India again," without ever competing with the actual
-// map for attention. Deliberately a cool grey over the warm tan earth, since
-// desaturation is what "out of play" reads as; deliberately strongest at the
-// zooms where you're scanning whole continents and nearly gone by the time
-// you're reading city shapes, where it would just be in the way. It also
-// stays *slightly* present at every zoom on purpose: "wait, was the last one
-// in India or Pakistan?" is a question you ask while zoomed in.
+// map for attention. Deliberately strongest at the zooms where you're scanning
+// whole continents and nearly gone by the time you're reading city shapes,
+// where it would just be in the way -- but never all the way to zero, since
+// "wait, was the last one in India or Pakistan?" is a question you ask while
+// zoomed in.
+//
+// The colors mirror the answer box: green for a country you found, amber for
+// one you gave up on. Both are pulled well toward teal/orange of their
+// Tailwind equivalents (green-500 #22c55e, amber-500 #f59e0b) on purpose --
+// the basemap's own vegetation is a yellow-leaning green (#6aab6a..#a9cf8d)
+// and a matching green wash over it reads as more forest, not as a state
+// change. Cooling the green until it's clearly not-a-plant is what makes it
+// legible at 20% opacity.
 const ELIMINATED_TINT_LAYER: LayerSpecification = {
   id: ELIMINATED_LAYER_ID,
   type: 'fill',
   source: ELIMINATED_SOURCE_ID,
   paint: {
-    'fill-color': '#5b6b7a',
-    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.22, 5, 0.2, 8, 0.1, 11, 0.06],
+    'fill-color': ['match', ['get', 'outcome'], 'revealed', '#e08a1e', '#00a884'],
+    // A saturated hue carries more visual weight than the neutral grey this
+    // started as, so the whole curve sits a touch lower than the grey's did.
+    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.2, 5, 0.18, 8, 0.09, 11, 0.055],
   },
 };
 
-// Faint "there is land here" rings. Sized and faded so they hand off to the
-// island's real drawn shape rather than sitting on top of it: markers for
-// islands big enough to recognize unaided disappear by z6, while the ones
-// that are still a single pixel at z6 keep theirs until z9.
-const ISLAND_MARKER_LAYER = {
-  id: 'island_markers',
-  type: 'circle',
-  source: ISLANDS_SOURCE_ID,
-  paint: {
-    'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2.5, 4, 4.5, 8, 6],
-    'circle-color': MINIMAP_THEME_OVERRIDES.earth,
-    'circle-stroke-width': 1,
-    'circle-stroke-color': '#5f8ea3',
-    // Both opacities share one curve so the ring and its fill never come
-    // apart mid-fade. The z6 stop is where the two size classes diverge.
-    'circle-opacity': islandFadeCurve(0.75),
-    'circle-stroke-opacity': islandFadeCurve(0.9),
-  },
-} as unknown as LayerSpecification;
+// Faint "there is land here" rings, in size buckets that fade in and out on
+// their own zoom windows.
+//
+// One flat set of markers for every island at every zoom was the first
+// attempt and was too much: 1,000+ dots all switched on at world view, where
+// the ones you actually navigate by are drowned out by specks. An island is
+// only worth marking across the band where it's too small to see but big
+// enough to be looking for -- roughly, while its true width is between about
+// a third of a pixel and six pixels. Since a pixel is worth ~2x fewer km per
+// zoom level, that band shifts down the zoom range as islands get smaller,
+// which is what these buckets encode: at z0 only the 50km-and-up islands are
+// marked (~120 of them worldwide), and the small stuff fades in later, as you
+// close in on somewhere specific.
+//
+// MapLibre can't take a per-feature zoom threshold in a filter (zoom is only
+// valid at the top level of a step/interpolate), so this is one layer per
+// bucket -- same shape as buildRiverOverlayLayers() below, for the same
+// reason.
+const ISLAND_BUCKETS = [
+  { minSpanKm: 3, maxSpanKm: 8, fadeIn: [4.0, 4.8], fadeOut: [8.5, 9.3] },
+  { minSpanKm: 8, maxSpanKm: 20, fadeIn: [2.6, 3.4], fadeOut: [7.0, 7.8] },
+  { minSpanKm: 20, maxSpanKm: 50, fadeIn: [1.0, 1.8], fadeOut: [5.5, 6.3] },
+  { minSpanKm: 50, maxSpanKm: 120, fadeIn: [0, 0], fadeOut: [4.2, 5.0] },
+  { minSpanKm: 120, maxSpanKm: Infinity, fadeIn: [0, 0], fadeOut: [3.0, 3.8] },
+] as const;
 
-function islandFadeCurve(peak: number) {
-  const smallOnly = ['case', ['<', ['get', 'span'], ISLAND_SELF_EVIDENT_SPAN_KM], peak, 0];
-  return ['interpolate', ['linear'], ['zoom'], 0, peak, 5, peak, 6, smallOnly, 9, 0];
+// Peak opacity, low enough that a cluster of markers reads as texture rather
+// than as a rash of dots. The ring carries the shape; the fill is barely
+// there, just enough to say "land" rather than "circle".
+const ISLAND_FILL_OPACITY = 0.3;
+const ISLAND_STROKE_OPACITY = 0.65;
+
+function islandFade(bucket: (typeof ISLAND_BUCKETS)[number], peak: number) {
+  const [inStart, inEnd] = bucket.fadeIn;
+  const [outStart, outEnd] = bucket.fadeOut;
+  const stops =
+    inEnd > inStart ? [inStart, 0, inEnd, peak, outStart, peak, outEnd, 0] : [outStart, peak, outEnd, 0];
+  return ['interpolate', ['linear'], ['zoom'], ...stops];
+}
+
+function buildIslandMarkerLayers(): LayerSpecification[] {
+  return ISLAND_BUCKETS.map((bucket) => {
+    const filter = Number.isFinite(bucket.maxSpanKm)
+      ? ['all', ['>=', ['get', 'span'], bucket.minSpanKm], ['<', ['get', 'span'], bucket.maxSpanKm]]
+      : ['>=', ['get', 'span'], bucket.minSpanKm];
+    return {
+      id: `island_markers_${bucket.minSpanKm}`,
+      type: 'circle',
+      source: ISLANDS_SOURCE_ID,
+      minzoom: bucket.fadeIn[0],
+      maxzoom: bucket.fadeOut[1],
+      filter,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 4, 3, 9, 4],
+        'circle-color': MINIMAP_THEME_OVERRIDES.earth,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#5f8ea3',
+        'circle-opacity': islandFade(bucket, ISLAND_FILL_OPACITY),
+        'circle-stroke-opacity': islandFade(bucket, ISLAND_STROKE_OPACITY),
+      },
+    } as unknown as LayerSpecification;
+  });
 }
 
 /** Inserts one or more layers right before the first layer with the given id
@@ -249,7 +292,7 @@ export function buildMinimapStyle(
         buildRiverOverlayLayers()
       ),
       'boundaries_country',
-      [ELIMINATED_TINT_LAYER, ISLAND_MARKER_LAYER]
+      [ELIMINATED_TINT_LAYER, ...buildIslandMarkerLayers()]
     )
   );
 

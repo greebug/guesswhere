@@ -32,6 +32,14 @@ function roundedCoordKey(lat: number, lon: number): string {
   return `${lat.toFixed(2)},${lon.toFixed(2)}`;
 }
 
+/** Border-label colors for a country that's still in play, one you found, and
+ * one you revealed -- the same three states the answer box uses. */
+function labelClass(outcome: 'solved' | 'revealed' | undefined): string {
+  if (outcome === 'solved') return 'bg-emerald-100/90 text-emerald-800';
+  if (outcome === 'revealed') return 'bg-amber-100/90 text-amber-800';
+  return 'bg-white/85 text-zinc-800';
+}
+
 type Layer = 'map' | 'elevation';
 
 interface CountryRef {
@@ -39,7 +47,14 @@ interface CountryRef {
   name: string;
 }
 
-const EMPTY_COUNTRIES: CountryRef[] = [];
+/** A country the player has finished with, and how. The outcome drives both
+ * the tint color and the border label's, mirroring the answer box: green for
+ * found, amber for given up on. */
+interface EliminatedCountry extends CountryRef {
+  outcome: 'solved' | 'revealed';
+}
+
+const EMPTY_COUNTRIES: EliminatedCountry[] = [];
 
 interface MiniMapProps {
   lat: number;
@@ -52,7 +67,7 @@ interface MiniMapProps {
   /** Countries already used up by a settled round, so they can't be the
    * answer to any remaining one. Solo only -- duels draw rounds one at a time
    * with no country-uniqueness rule, so nothing is ever eliminated there. */
-  eliminated?: CountryRef[];
+  eliminated?: EliminatedCountry[];
 }
 
 export default function MiniMap({
@@ -78,7 +93,10 @@ export default function MiniMap({
   // them immutable so the browser would serve repeats from cache anyway; this
   // just avoids the round trip entirely.
   const shapeCache = useRef(new Map<string, GeoJSON.Feature>());
-  const eliminatedIso = eliminated.map((c) => c.iso2).join(',');
+  // Outcome is part of the key, not just the code: a reported round can swap a
+  // country out of the set entirely, and re-deriving from one string keeps the
+  // effect's dependency honest without a deep compare.
+  const eliminatedKey = eliminated.map((c) => `${c.iso2}:${c.outcome}`).join(',');
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -207,19 +225,29 @@ export default function MiniMap({
     if (!map) return;
     let cancelled = false;
 
-    const codes = eliminatedIso ? eliminatedIso.split(',') : [];
+    const wanted = eliminatedKey
+      ? eliminatedKey.split(',').map((entry) => {
+          const [iso, outcome] = entry.split(':');
+          return { iso, outcome };
+        })
+      : [];
 
     const apply = () => {
       const source = map.getSource(ELIMINATED_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
       if (!source) return;
-      const features = codes
-        .map((iso) => shapeCache.current.get(iso))
-        .filter((f): f is GeoJSON.Feature => !!f);
+      const features: GeoJSON.Feature[] = [];
+      for (const { iso, outcome } of wanted) {
+        const shape = shapeCache.current.get(iso);
+        if (!shape) continue;
+        // The cached shape is shared across rounds, so the outcome is stamped
+        // on a copy at draw time rather than mutated into it.
+        features.push({ ...shape, properties: { ...shape.properties, outcome } });
+      }
       source.setData({ type: 'FeatureCollection', features });
     };
 
     (async () => {
-      const missing = codes.filter((iso) => !shapeCache.current.has(iso));
+      const missing = wanted.map((w) => w.iso).filter((iso) => !shapeCache.current.has(iso));
       await Promise.all(
         missing.map(async (iso) => {
           try {
@@ -243,7 +271,7 @@ export default function MiniMap({
       cancelled = true;
       map.off('style.load', apply);
     };
-  }, [eliminatedIso]);
+  }, [eliminatedKey]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -274,19 +302,17 @@ export default function MiniMap({
         }`}
       >
         <div ref={containerRef} className="h-full w-full" />
-        {/* An eliminated country's label is muted to match its tint. At the
-            zooms where these labels appear the wash is already faint, and
-            "was the last one in India or Pakistan?" is exactly the question
-            you ask with a border on screen -- so the answer is put on the
-            label itself rather than left to a shade of grey. */}
+        {/* An eliminated country's label carries the same green/amber as its
+            tint. At the zooms where these labels appear the wash is already
+            faint, and "was the last one in India or Pakistan?" is exactly the
+            question you ask with a border on screen -- so the answer is put on
+            the label itself rather than left to a shade of color. */}
         {borderLabels &&
           ([borderLabels.a, borderLabels.b] as const).map((country, i) => (
             <div
               key={country.iso2}
               className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap shadow ${
-                eliminated.some((c) => c.iso2 === country.iso2)
-                  ? 'bg-zinc-300/80 text-zinc-500'
-                  : 'bg-white/85 text-zinc-800'
+                labelClass(eliminated.find((c) => c.iso2 === country.iso2)?.outcome)
               }`}
               style={{
                 left: `${BORDER_SAMPLE_POINTS[i].x * 100}%`,

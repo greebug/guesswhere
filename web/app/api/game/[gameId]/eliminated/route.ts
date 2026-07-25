@@ -6,7 +6,9 @@ import { isoCodeFor } from '@/lib/server/countryCode';
 export const runtime = 'nodejs';
 
 // Which countries are out of play: the countries of rounds this game has
-// already settled, solved or revealed.
+// already settled, plus HOW each one was settled, so the minimap can tint a
+// country you found in the same green as the answer box and one you gave up
+// on in the same amber.
 //
 // SETTLED ONLY. This endpoint hands back country identities, which is answer
 // information -- for an unsettled round it would be a straight-up spoiler, and
@@ -27,16 +29,21 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'game not found' }, { status: 404 });
 
   const grader = getGrader();
-  const byIso = new Map<string, string>();
+  const byIso = new Map<string, { name: string; outcome: 'solved' | 'revealed' }>();
   for (const round of session.rounds) {
     if (!round.solved && !round.revealed) continue;
     const city = grader.getCityRow(round.cityId);
     if (!city) continue;
     const iso2 = isoCodeFor(city);
-    if (iso2) byIso.set(iso2, city.country);
+    if (!iso2) continue;
+    // `solved` and `revealed` are mutually exclusive per round (guess/route.ts
+    // and reveal/route.ts each refuse to touch an already-settled round), and
+    // one country can only appear once in a game -- so there's no precedence
+    // question to settle here.
+    byIso.set(iso2, { name: city.country, outcome: round.solved ? 'solved' : 'revealed' });
   }
 
   return NextResponse.json({
-    countries: [...byIso].map(([iso2, name]) => ({ iso2, name })),
+    countries: [...byIso].map(([iso2, v]) => ({ iso2, name: v.name, outcome: v.outcome })),
   });
 }

@@ -199,16 +199,35 @@ Three things Jesse asked for after playing, plus one real bug found underneath t
 - **Countries already used are tinted out on the minimap** (solo only). A settled round's
   country can never come up again, so it's dead space. `GET /api/game/[id]/eliminated`
   returns the countries of **settled rounds only** — for an unsettled round that would be
-  a straight spoiler, and at the last unsolved round "the one country not yet greyed"
+  a straight spoiler, and at the last unsolved round "the one country not yet tinted"
   would name the answer outright. Shapes come one-per-request from
   `GET /api/geo/shape?iso=XX` marked `immutable`, so the browser's own cache dedupes them
   across rounds and games (a batched endpoint would re-download Canada ten times a game).
   The tint fades with zoom but never to zero — "was the last one India or Pakistan?" is a
-  question you ask zoomed in. The border labels mute to match.
+  question you ask zoomed in. The border labels carry the same colors.
   **Duels deliberately have none of this**: duel rounds are drawn one at a time with no
   country-uniqueness rule, so a used country tells you nothing there.
-- **Small isolated islands get a faint marker ring** below z6-z9 (`islands.json`, see
-  Layout). Unnamed on purpose.
+- **Small isolated islands get a faint marker ring** (`islands.json`, see Layout).
+  Unnamed on purpose.
+
+Jesse confirmed the tint live and asked for two follow-ups, both shipped:
+
+- **Tint color now encodes the outcome** — teal-green for a country you found, amber for
+  one you revealed, matching the answer box. The green is pulled well toward teal on
+  purpose: the basemap's own vegetation is a yellow-leaning green (`#6aab6a`..`#a9cf8d`),
+  and a matching green wash over it reads as more forest rather than as a state change.
+  `/eliminated` carries an `outcome` field; the client stamps it onto the cached shape at
+  draw time (the shape itself is shared across rounds, so it isn't mutated).
+- **Island markers are bucketed by size, not all drawn at once.** The first version put a
+  dot on all ~1,000 islands at every zoom and Jesse (rightly) found it overkill —
+  especially at world view, where the islands you actually navigate by were drowned out by
+  specks. An island is only worth marking across the band where it's too small to see but
+  big enough to be looking for, and that band slides down the zoom range as islands get
+  smaller. `ISLAND_BUCKETS` encodes it: at z0 only 50km+ islands are marked (~120
+  worldwide, down from 1,000), with smaller ones fading in as you close in and each one's
+  marker fading out once its real shape is legible. Markers are also smaller and fainter.
+  **`ISLAND_BUCKETS` in `minimapStyle.ts` and `MIN_SPAN_KM` in `tools/build-islands.js`
+  have to be read together** — the buckets assume the builder's `span` property.
 
 **The bug: "no two cities from the same country" was not actually holding.** It keyed on
 the raw `country` string, and the corpus carries TWO spellings for 31 countries — GHSL's
@@ -227,12 +246,12 @@ France's overseas departments into France, so those 17 cities (Réunion, Guadelo
 Martinique, Mayotte, French Guiana) go untinted rather than tinting mainland France —
 `shapeForIso()` returns null and the client treats a 404 as "nothing to draw".
 
-**Verified computationally, not visually.** The style object validates clean against
-maplibre's own style-spec validator, layer order and paint expressions confirmed, and the
-API behaviour is covered by the script above. The sandbox browser's `document.hidden`
-throttle stops MapLibre from ever parsing the style, so **nobody has looked at the actual
-tint or island markers on screen yet** — colors and opacities are a first guess and may
-want tuning.
+**Verified computationally, not visually** — the sandbox browser's `document.hidden`
+throttle stops MapLibre from ever parsing the style, so the style object is checked
+against maplibre's own style-spec validator (layer order, paint expressions) and the API
+behaviour by `verify-eliminated.mjs`, but nothing is ever seen rendered. Jesse has
+confirmed the original grey tint and the "City, Country" answer live; **the green/amber
+colors and the island bucket thresholds have not been looked at by anyone yet.**
 
 ## OPEN RIGHT NOW — read this first (as of 2026-07-23)
 

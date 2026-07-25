@@ -15,7 +15,7 @@ from the repo root), then from `web/`:
 node scripts/verify-game.mjs     # 44 checks: auth, active-time accrual, leaderboards, prune safety
 node scripts/verify-email.mjs    # 24 checks: verify/reset token handling
 node --experimental-strip-types scripts/verify-appurl.mjs   # 12 checks: emailed-link origin resolution
-node scripts/verify-eliminated.mjs   # 11 checks: country-on-answer, the eliminated-country hint, one-country-per-game
+node scripts/verify-eliminated.mjs   # 13 checks: country-on-answer, the eliminated-country hint, one-country-per-game
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 

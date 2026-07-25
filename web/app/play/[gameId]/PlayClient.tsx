@@ -18,9 +18,10 @@ interface RoundView {
   canonicalName: string | null;
 }
 
-interface CountryRef {
+interface EliminatedCountry {
   iso2: string;
   name: string;
+  outcome: 'solved' | 'revealed';
 }
 
 interface GameView {
@@ -43,9 +44,9 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reportPending, setReportPending] = useState(false);
   const [summary, setSummary] = useState<GameSummary | null>(null);
+  const [eliminated, setEliminated] = useState<EliminatedCountry[]>([]);
   // Total banked on the server, plus a local ticker so the header clock moves
   // between heartbeats rather than jumping every 10 seconds.
-  const [eliminated, setEliminated] = useState<CountryRef[]>([]);
   const [bankedMs, setBankedMs] = useState(0);
   const [tickBase, setTickBase] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -112,7 +113,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     return () => clearInterval(interval);
   }, [game, currentIndex, focus, summary]);
 
-  // Which countries are out of play, for the minimap's greyed-out tint. Keyed
+  // Which countries are out of play, for the minimap's tint. Keyed
   // on the settled/unsettled pattern rather than a round count, since Report
   // Round can un-settle a slot as well as settle one, and the server is the
   // only side that knows any round's country -- deliberately, since for an
@@ -129,7 +130,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
     fetch(api(`/api/game/${gameId}/eliminated`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!cancelled && data) setEliminated(data.countries as CountryRef[]);
+        if (!cancelled && data) setEliminated(data.countries as EliminatedCountry[]);
       })
       .catch(() => {
         // Purely a hint layer -- a failed fetch just leaves the map untinted.

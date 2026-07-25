@@ -117,6 +117,17 @@ async function main() {
   const list = (await json(`/api/game/${gameId}/eliminated`)).body.countries;
   const expected = new Set([keyFor(answers[3]), keyFor(answers[6])]);
   const got = new Set(list.map((c) => c.iso2));
+  const outcomeOf = (iso) => list.find((c) => c.iso2 === iso)?.outcome;
+  check(
+    'the solved round is tagged solved (green tint)',
+    outcomeOf(keyFor(answers[3])) === 'solved',
+    outcomeOf(keyFor(answers[3]))
+  );
+  check(
+    'the revealed round is tagged revealed (amber tint)',
+    outcomeOf(keyFor(answers[6])) === 'revealed',
+    outcomeOf(keyFor(answers[6]))
+  );
   check(
     'eliminated lists exactly the solved and revealed rounds',
     got.size === expected.size && [...expected].every((iso) => got.has(iso)),
