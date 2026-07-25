@@ -31,6 +31,9 @@ export default function AnswerBox({
 }: AnswerBoxProps) {
   const [value, setValue] = useState('');
   const [shake, setShake] = useState(false);
+  // One-shot flare on the transition into solved, not a permanent glow --
+  // the celebration is the moment, the green is the state.
+  const [flare, setFlare] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const settled = solved || revealed;
 
@@ -40,6 +43,7 @@ export default function AnswerBox({
   useEffect(() => {
     setValue('');
     setShake(false);
+    setFlare(false);
   }, [resetKey]);
 
   // Left/Right paginate between rounds -- but only when the answer box isn't
@@ -61,6 +65,8 @@ export default function AnswerBox({
     const result = await onGuess(value);
     if (result.correct) {
       playCorrect();
+      setFlare(true);
+      setTimeout(() => setFlare(false), 900);
     } else {
       playIncorrect();
       setValue('');
@@ -69,44 +75,74 @@ export default function AnswerBox({
     }
   }
 
+  const tone = solved
+    ? { ring: 'rgb(46 230 197)', text: 'text-gw-teal', label: 'Found' }
+    : revealed
+      ? { ring: 'rgb(255 179 64)', text: 'text-gw-amber', label: 'Revealed' }
+      : { ring: 'rgb(255 255 255 / 0.15)', text: 'text-gw-ink', label: null as string | null };
+
   return (
     <div className="flex items-center gap-3">
-      <button
-        onClick={onPrev}
-        disabled={!canPrev}
-        aria-label="Previous city"
-        className="rounded-full bg-black/60 px-4 py-4 text-xl text-white hover:bg-black/80 disabled:opacity-30"
-      >
-        &larr;
-      </button>
+      <PagerButton direction="prev" onClick={onPrev} disabled={!canPrev} />
 
-      <form onSubmit={submit} className="flex-1">
+      <form onSubmit={submit} className="relative flex-1">
+        {/* The status cap sits above the field rather than inside it, so a
+            long "City, Country" answer never has to share a line with it. */}
+        {tone.label && (
+          <span
+            className={`absolute -top-2.5 left-4 z-10 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${tone.text}`}
+            style={{ borderColor: tone.ring, background: '#050b14' }}
+          >
+            {tone.label}
+          </span>
+        )}
         <input
           ref={inputRef}
           type="text"
-          value={settled ? canonicalName ?? '' : value}
+          value={settled ? (canonicalName ?? '') : value}
           onChange={(e) => setValue(e.target.value)}
           readOnly={settled}
           placeholder="Where is this?"
           autoComplete="off"
-          className={`w-full rounded-lg border-4 px-6 py-4 text-center text-2xl font-medium shadow-xl outline-none transition-colors ${
-            solved
-              ? 'border-green-500 bg-green-50 text-green-900'
-              : revealed
-                ? 'border-amber-500 bg-amber-50 text-amber-900'
-                : 'border-gray-300 bg-white text-black focus:border-blue-400'
-          } ${shake ? 'animate-shake' : ''}`}
+          // No text color in the base string: `tone.text` is the ONLY color
+          // class here on purpose. Two color utilities on one element don't
+          // resolve by class-attribute order, they resolve by whichever
+          // Tailwind happened to emit later in the stylesheet -- so listing a
+          // default alongside the real one is a coin flip, not a fallback.
+          className={`w-full rounded-2xl border-2 bg-black/70 px-6 py-4 text-center text-2xl font-semibold shadow-2xl outline-none backdrop-blur-md transition-all placeholder:font-normal placeholder:text-gw-faint ${
+            settled ? '' : 'focus:border-gw-cyan/70'
+          } ${shake ? 'animate-shake' : ''} ${flare ? 'gw-flare' : ''} ${tone.text}`}
+          style={{
+            borderColor: tone.ring,
+            boxShadow: settled
+              ? `0 0 40px -12px ${tone.ring}, inset 0 0 30px -18px ${tone.ring}`
+              : '0 24px 48px -24px rgb(0 0 0 / 0.9)',
+          }}
         />
       </form>
 
-      <button
-        onClick={onNext}
-        disabled={!canNext}
-        aria-label="Next city"
-        className="rounded-full bg-black/60 px-4 py-4 text-xl text-white hover:bg-black/80 disabled:opacity-30"
-      >
-        &rarr;
-      </button>
+      <PagerButton direction="next" onClick={onNext} disabled={!canNext} />
     </div>
+  );
+}
+
+function PagerButton({
+  direction,
+  onClick,
+  disabled,
+}: {
+  direction: 'prev' | 'next';
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={direction === 'prev' ? 'Previous city' : 'Next city'}
+      className="gw-btn h-14 w-14 shrink-0 rounded-full text-xl backdrop-blur-md"
+    >
+      {direction === 'prev' ? '←' : '→'}
+    </button>
   );
 }

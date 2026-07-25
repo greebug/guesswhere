@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import MainMap, { type MainMapHandle } from '@/components/MainMap';
+import OrbitMark from '@/components/OrbitMark';
 import MiniMap from '@/components/MiniMap';
 import GameHeader from '@/components/GameHeader';
 import AnswerBox from '@/components/AnswerBox';
@@ -207,15 +209,22 @@ export default function PlayClient({ gameId }: { gameId: string }) {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-white">
-        <p>{error}</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="gw-panel max-w-sm p-6 text-center">
+          <p className="gw-eyebrow text-gw-rose">Signal lost</p>
+          <p className="mt-2 text-gw-ink">{error}</p>
+          <Link href="/" className="gw-btn mt-5 px-4 py-2 text-sm">
+            Back to Home
+          </Link>
+        </div>
       </div>
     );
   }
   if (!game) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-white">
-        <p>Loading...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <OrbitMark size={96} />
+        <p className="gw-eyebrow gw-pulse-soft">Acquiring imagery</p>
       </div>
     );
   }
@@ -244,6 +253,8 @@ export default function PlayClient({ gameId }: { gameId: string }) {
         correctCount={game.correctCount}
         totalRounds={game.rounds.length}
         currentSlide={currentIndex + 1}
+        rounds={game.rounds}
+        onJump={setCurrentIndex}
         elapsedMs={liveMs}
       />
 

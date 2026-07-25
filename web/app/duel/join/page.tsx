@@ -39,11 +39,11 @@ export default function JoinDuel() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-900 px-4 text-white">
-      <h1 className="text-4xl font-bold">Join Duel</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <h1 className="gw-display text-5xl font-black tracking-[0.12em]">Join Duel</h1>
 
       <div className="flex flex-col gap-2">
-        <label className="text-center text-sm text-zinc-400">Join Code</label>
+        <label className="gw-eyebrow text-center">Join Code</label>
         <input
           type="text"
           value={code}
@@ -52,17 +52,17 @@ export default function JoinDuel() {
           maxLength={4}
           placeholder="ABCD"
           autoFocus
-          className="w-40 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-3xl tracking-[0.3em] uppercase"
+          className="gw-input gw-num w-52 px-3 py-4 text-center text-4xl font-bold tracking-[0.35em] text-gw-teal uppercase"
         />
       </div>
 
       {user ? (
-        <p className="text-sm text-zinc-400">
-          Playing as <span className="font-semibold text-white">{user.username}</span>
+        <p className="text-sm text-gw-mute">
+          Playing as <span className="font-semibold text-gw-teal">{user.username}</span>
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          <label className="text-center text-sm text-zinc-400">Your name</label>
+          <label className="gw-eyebrow text-center">Your name</label>
           <input
             type="text"
             value={name}
@@ -70,7 +70,7 @@ export default function JoinDuel() {
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             maxLength={40}
             placeholder="Bob"
-            className="w-64 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg"
+            className="gw-input w-64 px-3 py-2.5 text-center text-lg"
           />
         </div>
       )}
@@ -78,22 +78,22 @@ export default function JoinDuel() {
       <button
         onClick={submit}
         disabled={loading || userLoading || !code.trim() || (needsName && !name.trim())}
-        className="rounded-full bg-white px-8 py-3 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+        className="gw-cta px-10 py-3.5"
       >
         {loading ? 'Joining...' : user ? 'Ready' : 'Play as Guest'}
       </button>
 
       {!user && !userLoading && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-gw-faint">
           or{' '}
-          <Link href="/" className="underline hover:text-zinc-300">
+          <Link href="/" className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
             sign in
           </Link>{' '}
           to use your account name
         </p>
       )}
 
-      {error && <p className="text-red-400">{error}</p>}
+      {error && <p className="rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-4 py-2 text-sm text-gw-rose">{error}</p>}
     </div>
   );
 }

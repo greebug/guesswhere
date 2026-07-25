@@ -2,17 +2,20 @@
 // stable position in the lobby's players array (host first, then join
 // order), so a player's color never changes mid-match. Six colors covers
 // duels well past the realistic player count; it simply cycles beyond that.
+// Tuned to the app's accent palette (see globals.css) rather than stock
+// Tailwind 500s: these sit on near-black glass and on satellite imagery, so
+// they need the extra luminance to hold up in both places.
 export const PLAYER_COLORS = [
-  '#ef4444', // red
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#f59e0b', // amber
-  '#a855f7', // violet
-  '#ec4899', // pink
+  '#ff5f7e', // rose
+  '#4cc9ff', // cyan
+  '#2ee6c5', // teal
+  '#ffb340', // amber
+  '#9d7bff', // violet
+  '#ff8ad4', // pink
 ] as const;
 
 // A round nobody solved (timed out) gets this instead of a player color.
-export const UNSOLVED_COLOR = '#9ca3af'; // zinc-400
+export const UNSOLVED_COLOR = '#6c7d99';
 
 export function colorForPlayerIndex(index: number): string {
   return PLAYER_COLORS[index % PLAYER_COLORS.length];

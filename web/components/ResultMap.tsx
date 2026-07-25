@@ -62,7 +62,7 @@ export default function ResultMap({ dots }: { dots: Dot[] }) {
   return (
     <div
       ref={containerRef}
-      className="h-64 w-full overflow-hidden rounded-lg border border-zinc-700"
+      className="h-64 w-full overflow-hidden rounded-lg border border-white/10"
     />
   );
 }

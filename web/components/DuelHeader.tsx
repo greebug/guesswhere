@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { colorForPlayer } from '@/lib/playerColors';
 
 interface DuelPlayer {
   id: string;
@@ -33,6 +34,44 @@ function formatTime(s: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+/** One player's score, in their own color -- the same color their rounds get
+ * on the post-match map, so the scoreboard and the report read as one thing. */
+function ScoreChip({
+  player,
+  players,
+  targetRounds,
+  isSelf,
+}: {
+  player: DuelPlayer;
+  players: DuelPlayer[];
+  targetRounds: number;
+  isSelf: boolean;
+}) {
+  const color = colorForPlayer(players, player.id);
+  return (
+    <div
+      className="flex items-center gap-2 rounded-lg border px-2.5 py-1"
+      style={{
+        borderColor: `${color}55`,
+        background: `${color}14`,
+        boxShadow: isSelf ? `0 0 20px -6px ${color}` : undefined,
+      }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      <span
+        className={`max-w-28 truncate text-sm ${isSelf ? 'font-bold' : 'font-medium'}`}
+        style={{ color }}
+      >
+        {player.name}
+      </span>
+      <span className="gw-num text-sm font-bold" style={{ color }}>
+        {player.roundWins}
+        <span className="text-[10px] opacity-50">/{targetRounds}</span>
+      </span>
+    </div>
+  );
+}
+
 export default function DuelHeader({
   players,
   targetRounds,
@@ -48,48 +87,57 @@ export default function DuelHeader({
   const hasReported = !!selfPlayerId && reportedBy.includes(selfPlayerId);
 
   return (
-    <div className="flex items-center justify-between bg-black/80 px-3 py-2 text-white">
-      <Link href="/" className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20">
+    <div className="relative z-30 flex items-center justify-between gap-4 border-b border-white/10 bg-gradient-to-b from-black/90 to-black/70 px-3 py-2 text-gw-ink backdrop-blur-xl">
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-gw-violet/50 to-transparent"
+      />
+
+      <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
         Home
       </Link>
 
-      <div className="flex items-center gap-4 text-sm">
-        <div className="flex gap-3 tabular-nums">
+      <div className="flex items-center gap-3">
+        <div className="flex gap-2">
           {players.map((p) => (
-            <span
+            <ScoreChip
               key={p.id}
-              className={`rounded px-2 py-1 ${p.id === selfPlayerId ? 'bg-white/20 font-semibold' : ''}`}
-            >
-              {p.name}: {p.roundWins}
-            </span>
+              player={p}
+              players={players}
+              targetRounds={targetRounds}
+              isSelf={p.id === selfPlayerId}
+            />
           ))}
         </div>
-        <span className="text-zinc-400">first to {targetRounds}</span>
+
         {remainingSeconds !== null && (
-          <span
-            className={`rounded px-2 py-1 font-bold tabular-nums ${
-              critical ? 'animate-timer-critical bg-red-600 text-white' : 'bg-white/10'
-            }`}
-          >
-            {formatTime(Math.max(0, remainingSeconds))}
-          </span>
+          <div className="flex flex-col items-end leading-none">
+            <span className="gw-eyebrow text-[9px]">Remaining</span>
+            <span
+              className={`gw-num rounded px-1 text-lg font-bold ${
+                critical ? 'animate-timer-critical bg-gw-rose text-white' : 'text-gw-ink'
+              }`}
+              style={critical ? undefined : { textShadow: '0 0 18px rgb(76 201 255 / 0.6)' }}
+            >
+              {formatTime(Math.max(0, remainingSeconds))}
+            </span>
+          </div>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <button
           onClick={onRecenter}
           title="Snap back to the pinpointed view of this round's city"
-          className="rounded border border-sky-400/40 bg-sky-500/15 px-3 py-1.5 text-sky-200 hover:bg-sky-500/25"
+          className="gw-btn gw-tone-cyan px-3 py-1.5 text-sm"
         >
           🎯 Recenter
         </button>
-        <span className="h-6 w-px bg-white/15" aria-hidden="true" />
         <button
           onClick={onReport}
           disabled={hasReported || reportDisabled}
           title="Bad or unusable imagery (e.g. heavy cloud cover) -- skips this round once every player has reported it, and excludes the city from all future games"
-          className="rounded border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-red-200 hover:bg-red-500/25 disabled:opacity-30"
+          className="gw-btn gw-tone-rose px-3 py-1.5 text-sm"
         >
           {hasReported ? `🚩 Reported (${reportedBy.length}/${totalPlayers})` : '🚩 Report Round'}
         </button>

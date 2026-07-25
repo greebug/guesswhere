@@ -31,17 +31,17 @@ function VerifyInner() {
   }, [token]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-900 px-4 text-white">
-      <h1 className="text-3xl font-bold">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">
         {state === 'working' ? 'Verifying…' : state === 'ok' ? 'Email verified' : 'Link not valid'}
       </h1>
-      {message && <p className="text-center text-zinc-400">{message}</p>}
+      {message && <p className="text-center text-gw-mute">{message}</p>}
       {state === 'ok' && (
-        <p className="text-center text-sm text-zinc-500">You can now reset your password by email.</p>
+        <p className="text-center text-sm text-gw-faint">You can now reset your password by email.</p>
       )}
       <Link
         href="/"
-        className="mt-2 rounded-full bg-white px-6 py-2 font-semibold text-black hover:bg-zinc-200"
+        className="mt-2 gw-cta px-6 py-2.5"
       >
         Back to Guesswhere
       </Link>
@@ -53,7 +53,7 @@ function VerifyInner() {
 // opts into client-side rendering at build time and Next fails the build.
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-900" />}>
+    <Suspense fallback={<div className="min-h-screen" />}>
       <VerifyInner />
     </Suspense>
   );

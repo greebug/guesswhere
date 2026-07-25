@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import SpaceBackdrop from "@/components/SpaceBackdrop";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,7 +28,13 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* The backdrop is fixed and -z-10, so it costs the play screen nothing
+          (MainMap paints over all of it) while giving every other screen a
+          sky to sit on. */}
+      <body className="min-h-full flex flex-col">
+        <SpaceBackdrop />
+        {children}
+      </body>
     </html>
   );
 }

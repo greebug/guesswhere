@@ -188,6 +188,62 @@ grading, the leaderboard API, `rivers.json`, asset prefixing (no un-prefixed
 `/_next/` refs remain), and Blitz's socket.io handshake including the WebSocket
 upgrade. **Not yet deployed** — nothing has been pushed.
 
+## The visual system — "orbital telemetry" (2026-07-25)
+
+The UI was plain zinc-on-white-buttons Tailwind; it's now a designed system.
+**Read `web/app/globals.css` first — it's the whole thing**, and the components
+just assemble its pieces.
+
+- **Palette is meaning-driven, not decorative.** The game already assigned
+  meaning to three colors, and the system just extends it everywhere: **teal =
+  found/correct/go** (same teal as the map's eliminated tint), **amber =
+  revealed/gave up**, **rose = report/destructive**. Everything else stays
+  monochrome — that's what stops three saturated accents becoming a fruit salad.
+  Backdrop is navy, never neutral black: pure `#000` beside satellite imagery
+  reads as a hole in the page.
+- **Class vocabulary**: `gw-panel` (glass card) / `gw-panel-lit` (+`--gw-tone`
+  for a colored glow) / `gw-btn` + `gw-tone-*` / `gw-cta` / `gw-input` /
+  `gw-chip` / `gw-check` / `gw-range` / `gw-eyebrow` / `gw-num` (every live
+  number, mono + tabular) / `gw-display` (gradient headline) / `gw-rule`.
+- **`components/SpaceBackdrop.tsx`** — fixed backdrop, mounted once in the root
+  layout. Drifting color clouds, a graticule, and 140 stars. **Star positions
+  come from a seeded PRNG, not `Math.random()`** — random ones would differ
+  between the server render and hydration and React would complain. All CSS and
+  inline SVG: a decorative background must never add a network request (and
+  Mapbox is the only imagery this project fetches, by invariant).
+- **`components/OrbitMark.tsx`** — the wireframe-globe logo. Each satellite is a
+  *sibling of its ring inside the same rotating group*, so it never moves
+  relative to the ring and the ring's rotation does the work. That dodges
+  needing SMIL or `offset-path` to send a dot around an ellipse, and it honors
+  `prefers-reduced-motion` for free.
+- **GameHeader gained a 10-round progress track** — pips colored by settle state
+  (teal found / amber revealed / dim open), ringed on the current round, and
+  **clickable to jump to that round**. That last part is a behavior addition, not
+  just a restyle: it's random-access pagination alongside the answer box's
+  existing arrows.
+- Duel `PLAYER_COLORS` were retuned to the same palette. They sit on near-black
+  glass *and* on satellite imagery, so they need the extra luminance.
+
+**Two traps, both hit for real during this work:**
+
+1. **Custom CSS must live in `@layer components` / `@layer base`.** Tailwind's
+   `@import "tailwindcss"` declares the layer order, and **unlayered CSS beats
+   every layered rule regardless of specificity** — so an unlayered
+   `.gw-btn { color: … }` silently outranks `text-gw-mute` on the same element.
+   The header links rendered white and only a computed-style dump explained why.
+2. **Never put a default color utility next to a state one** (`text-gw-ink`
+   *and* `text-gw-amber` on the same element). Same-layer utilities resolve by
+   Tailwind's emit order, not class-attribute order, so that's a coin flip
+   rather than a fallback.
+
+**Sandbox note that matters for any future UI verification:** the preview tab
+composites no frames (`document.hidden`), which means **CSS transitions never
+advance past their start value** — `getComputedStyle` returns pre-transition
+values forever and looks exactly like a cascade bug. Inject
+`* { transition: none !important }` before reading computed styles. (Also:
+Tailwind v4's `scale-*` sets the `scale` property, not `transform`, so reading
+`.transform` shows `none` and proves nothing.) Screenshots remain impossible.
+
 ## Eliminated-country hints + island markers (2026-07-25)
 
 Three things Jesse asked for after playing, plus one real bug found underneath them:

@@ -21,23 +21,53 @@ export default function RoundBreakdown({ rounds }: { rounds: BreakdownRound[] })
   return (
     <table className="w-full text-sm">
       <tbody>
-        {rounds.map((r) => (
-          <tr key={r.index} className="border-b border-zinc-800 last:border-0">
-            <td className="py-1.5 pr-2 tabular-nums text-zinc-600">{r.index + 1}</td>
-            <td className="py-1.5 pr-2">
-              <span className={r.revealed ? 'text-amber-400' : 'text-zinc-100'}>{r.name}</span>
-              {r.country && <span className="text-zinc-500">, {r.country}</span>}
-              {r.revealed && <span className="ml-2 text-xs text-amber-500">revealed</span>}
-            </td>
-            <td
-              className={`py-1.5 text-right tabular-nums ${
-                r.ms === slowest && slowest > 0 ? 'font-semibold text-white' : 'text-zinc-400'
-              }`}
-            >
-              {formatDuration(r.ms)}
-            </td>
-          </tr>
-        ))}
+        {rounds.map((r) => {
+          // A bar behind each row, scaled to that round's share of the
+          // slowest one. Turns a column of timestamps into a shape you can
+          // read at a glance -- which is the actual question being asked
+          // here ("where did the time go?"), not "how long was round 4".
+          const share = slowest > 0 ? (r.ms / slowest) * 100 : 0;
+          const isSlowest = r.ms === slowest && slowest > 0;
+          return (
+            <tr key={r.index} className="border-b border-white/[0.06] last:border-0">
+              <td className="w-6 py-2 pr-2">
+                <span
+                  className={`gw-num block text-center text-[11px] font-bold ${
+                    r.revealed ? 'text-gw-amber' : 'text-gw-faint'
+                  }`}
+                >
+                  {r.index + 1}
+                </span>
+              </td>
+              <td className="relative py-2 pr-3">
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-y-1 left-0 -z-10 rounded-r-sm"
+                  style={{
+                    width: `${share}%`,
+                    background: r.revealed
+                      ? 'linear-gradient(90deg, rgb(255 179 64 / 0.22), transparent)'
+                      : 'linear-gradient(90deg, rgb(46 230 197 / 0.18), transparent)',
+                  }}
+                />
+                <span className={r.revealed ? 'text-gw-amber' : 'text-gw-ink'}>{r.name}</span>
+                {r.country && <span className="text-gw-faint">, {r.country}</span>}
+                {r.revealed && (
+                  <span className="ml-2 rounded border border-gw-amber/30 px-1 text-[9px] font-semibold tracking-wide text-gw-amber uppercase">
+                    revealed
+                  </span>
+                )}
+              </td>
+              <td
+                className={`gw-num py-2 text-right ${
+                  isSlowest ? 'font-bold text-gw-ink' : 'text-gw-mute'
+                }`}
+              >
+                {formatDuration(r.ms)}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

@@ -208,15 +208,15 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   if (notFound) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-white">
-        <p>Lobby not found.</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-rose">No signal</p><p className="mt-2 text-gw-ink">Lobby not found.</p></div>
       </div>
     );
   }
   if (!state) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-white">
-        <p>Loading...</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <p className="gw-eyebrow gw-pulse-soft">Connecting</p>
       </div>
     );
   }
@@ -242,9 +242,9 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   if (state.status === 'countdown') {
     const remaining = state.countdownEndsAt ? Math.max(0, Math.ceil((state.countdownEndsAt - now) / 1000)) : 0;
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-900 text-white">
-        <p className="text-2xl text-zinc-400">Get ready...</p>
-        <p className="text-9xl font-extrabold tabular-nums">{remaining > 0 ? remaining : 'GO'}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="gw-eyebrow gw-pulse-soft text-base">Get ready</p>
+        <p className="gw-display gw-num text-[10rem] leading-none font-black">{remaining > 0 ? remaining : 'GO'}</p>
       </div>
     );
   }
@@ -336,8 +336,8 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-900 px-4 text-white">
-      <h1 className="text-3xl font-bold">Join Duel</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Join Duel</h1>
       <input
         type="text"
         value={name}
@@ -346,16 +346,16 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
         maxLength={40}
         placeholder="Your name"
         autoFocus
-        className="w-64 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg"
+        className="gw-input w-64 px-3 py-2.5 text-center text-lg"
       />
       <button
         onClick={submit}
         disabled={loading || !name.trim()}
-        className="rounded-full bg-white px-8 py-3 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+        className="gw-cta px-10 py-3.5"
       >
         {loading ? 'Joining...' : 'Ready'}
       </button>
-      {error && <p className="text-red-400">{error}</p>}
+      {error && <p className="rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-4 py-2 text-sm text-gw-rose">{error}</p>}
     </div>
   );
 }
@@ -401,27 +401,27 @@ function LobbyScreen({
   const s = settings.timerSeconds % 60;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-zinc-900 px-4 py-8 text-white">
-      <h1 className="text-4xl font-bold">Duel Lobby</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <h1 className="gw-display text-5xl font-black tracking-[0.12em]">Duel Lobby</h1>
 
       <div className="flex flex-col items-center gap-2">
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-gw-mute">
           Give friends this code on the <span className="underline">Join a Duel</span> page
         </p>
         <button
           onClick={copyCode}
           title="Click to copy"
-          className="rounded-lg bg-zinc-700 px-6 py-3 text-4xl font-bold tracking-[0.3em] hover:bg-zinc-600"
+          className="gw-input gw-num px-8 py-4 text-5xl font-black tracking-[0.35em] text-gw-teal transition hover:border-gw-teal/60"
         >
           {copied ? 'Copied!' : state.joinCode}
         </button>
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        <p className="text-sm text-zinc-400">Players</p>
+        <p className="gw-eyebrow">Players</p>
         <div className="flex flex-wrap justify-center gap-2">
           {state.players.map((p) => (
-            <span key={p.id} className="rounded bg-zinc-800 px-3 py-1">
+            <span key={p.id} className="gw-chip px-3 py-1.5 text-sm text-gw-ink">
               {p.name} {p.id === state.hostPlayerId && '(host)'}
             </span>
           ))}
@@ -430,11 +430,11 @@ function LobbyScreen({
 
       <div className="flex w-full max-w-sm flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-zinc-400">
+          <label className="gw-eyebrow">
             Round timer: {m}:{String(s).padStart(2, '0')}
           </label>
           <input
-            type="range"
+            type="range" className="gw-range"
             min={30}
             max={600}
             step={15}
@@ -444,11 +444,11 @@ function LobbyScreen({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-zinc-400">
+          <label className="gw-eyebrow">
             First to {settings.targetRounds} round{settings.targetRounds === 1 ? '' : 's'} wins
           </label>
           <input
-            type="range"
+            type="range" className="gw-range"
             min={1}
             max={15}
             step={1}
@@ -458,23 +458,23 @@ function LobbyScreen({
           />
         </div>
         <div className="flex flex-col items-center gap-2">
-          <label className="text-sm text-zinc-400">Population Threshold</label>
+          <label className="gw-eyebrow">Population Threshold</label>
           <input
             type="number"
             min={1}
             value={settings.targetPopulation}
             disabled={!isHost}
             onChange={(e) => change({ targetPopulation: Number(e.target.value) })}
-            className="w-48 rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-center text-lg disabled:opacity-60"
+            className="w-48 gw-input px-3 py-2 text-center text-lg disabled:opacity-60"
           />
         </div>
-        <label className="flex items-center justify-center gap-2 text-sm text-zinc-400">
+        <label className="flex items-center justify-center gap-2 text-sm text-gw-mute">
           <input
             type="checkbox"
             checked={settings.onlyCoast}
             disabled={!isHost}
             onChange={(e) => change({ onlyCoast: e.target.checked })}
-            className="h-4 w-4 rounded border-zinc-600 bg-zinc-800"
+            className="gw-check"
           />
           Only Coast (within 20mi of a coastline)
         </label>
@@ -483,12 +483,12 @@ function LobbyScreen({
       {isHost ? (
         <button
           onClick={onStart}
-          className="rounded-full bg-white px-8 py-3 font-semibold text-black hover:bg-zinc-200"
+          className="gw-cta px-10 py-3.5"
         >
           Start Game
         </button>
       ) : (
-        <p className="text-zinc-400">Waiting for the host to start...</p>
+        <p className="text-gw-mute">Waiting for the host to start...</p>
       )}
     </div>
   );

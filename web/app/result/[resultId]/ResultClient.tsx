@@ -34,9 +34,9 @@ export default function ResultClient({ resultId }: { resultId: string }) {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-900 text-white">
-        <p>{error}</p>
-        <Link href="/" className="text-sm text-zinc-400 underline hover:text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 ">
+        <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-rose">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           Back to Guesswhere
         </Link>
       </div>
@@ -44,24 +44,24 @@ export default function ResultClient({ resultId }: { resultId: string }) {
   }
   if (!result) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-white">
-        <p>Loading…</p>
+      <div className="flex min-h-screen items-center justify-center ">
+        <p className="gw-eyebrow gw-pulse-soft">Loading</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-900 px-4 py-10 text-white">
+    <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-8">
       <div className="w-full max-w-xl">
-        <Link href="/" className="text-sm text-zinc-500 underline hover:text-white">
+        <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           &larr; Guesswhere
         </Link>
       </div>
 
       <div className="w-full max-w-xl text-center">
-        <h1 className="text-3xl font-bold">{result.username}</h1>
+        <h1 className="gw-display text-4xl font-black tracking-[0.08em]">{result.username}</h1>
         <p className="mt-1 text-4xl font-bold tabular-nums">{formatDuration(result.totalMs)}</p>
-        <p className="mt-2 text-sm text-zinc-400">
+        <p className="mt-2 text-sm text-gw-mute">
           {formatPopulation(result.targetPopulation)}
           {result.onlyCoast ? ', coast only' : ''} &middot;{' '}
           {new Date(result.finishedAt).toLocaleDateString()}
@@ -72,8 +72,8 @@ export default function ResultClient({ resultId }: { resultId: string }) {
         <ResultMap dots={result.rounds.map((r) => ({ name: r.name, lat: r.lat, lon: r.lon }))} />
       </div>
 
-      <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+      <div className="gw-panel w-full max-w-xl p-5">
+        <h2 className="gw-eyebrow mb-3">
           Time per city
         </h2>
         <RoundBreakdown rounds={result.rounds} />

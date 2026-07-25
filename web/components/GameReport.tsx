@@ -29,6 +29,7 @@ export interface GameSummary {
 export default function GameReport({ summary }: { summary: GameSummary }) {
   const [copyState, setCopyState] = useState<'idle' | 'working' | 'copied'>('idle');
   const solved = summary.rounds.filter((r) => r.solved).length;
+  const perfect = solved === summary.rounds.length;
 
   async function shareCities() {
     setCopyState('working');
@@ -45,44 +46,53 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-900 px-4 py-10 text-white">
+    <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-8">
       <div className="flex w-full max-w-xl items-center justify-between">
-        <Link href="/" className="rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20">
+        <Link href="/" className="gw-btn px-4 py-1.5 text-sm">
           Home
         </Link>
         <button
           onClick={shareCities}
           disabled={copyState === 'working'}
           title="Copy a link that gives a friend their own playthrough of these same 10 cities"
-          className="rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20 disabled:opacity-30"
+          className={`gw-btn px-4 py-1.5 text-sm ${copyState === 'copied' ? 'gw-tone-teal' : ''}`}
         >
-          {copyState === 'copied' ? 'Copied!' : 'Share Cities'}
+          {copyState === 'copied' ? '✓ Copied' : 'Share Cities'}
         </button>
       </div>
 
-      <div className="w-full max-w-xl text-center">
-        <h1 className="text-2xl font-bold">
-          {solved === summary.rounds.length ? 'All 10 found' : `${solved} of ${summary.rounds.length} found`}
+      {/* The scoreboard. The time is the hero here -- it's the number that
+          goes on the leaderboard and the one people compare. */}
+      <div
+        className="gw-rise gw-panel gw-panel-lit w-full max-w-xl px-6 py-7 text-center"
+        style={{ ['--gw-tone' as string]: perfect ? '46 230 197' : '255 179 64' }}
+      >
+        <p className="gw-eyebrow">{perfect ? 'Clean sweep' : 'Run complete'}</p>
+        <h1 className="mt-1 text-xl font-bold text-gw-ink">
+          {perfect ? 'All 10 found' : `${solved} of ${summary.rounds.length} found`}
         </h1>
-        <p className="mt-1 text-4xl font-bold tabular-nums">{formatDuration(summary.totalMs)}</p>
+        <p className="gw-display gw-num mt-3 text-6xl font-black">
+          {formatDuration(summary.totalMs)}
+        </p>
 
         {summary.eligible ? (
-          <p className="mt-2 text-sm font-medium text-green-400">Submitted to the leaderboard</p>
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-gw-teal/40 bg-gw-teal/10 px-3 py-1 text-xs font-semibold text-gw-teal">
+            <span className="h-1.5 w-1.5 rounded-full bg-gw-teal gw-pulse-soft" />
+            Submitted to the leaderboard
+          </p>
         ) : (
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-4 text-xs text-gw-faint">
             Not ranked — {summary.ineligibleReason ?? 'this run doesn’t qualify'}
           </p>
         )}
       </div>
 
-      <div className="w-full max-w-xl">
+      <div className="gw-rise w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 shadow-[0_24px_48px_-24px_rgb(0,0,0,0.9)]" style={{ animationDelay: '0.1s' }}>
         <ResultMap dots={summary.rounds.map((r) => ({ name: r.name, lat: r.lat, lon: r.lon }))} />
       </div>
 
-      <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-          Time per city
-        </h2>
+      <div className="gw-rise gw-panel w-full max-w-xl p-5" style={{ animationDelay: '0.2s' }}>
+        <h2 className="gw-eyebrow mb-3">Time per city</h2>
         <RoundBreakdown rounds={summary.rounds} />
       </div>
     </div>

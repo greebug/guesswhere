@@ -18,23 +18,37 @@ interface Board {
   entries: Entry[];
 }
 
-function BoardColumn({ title, entries }: { title: string; entries: Entry[] }) {
+/** Only the podium gets color -- gold, silver, bronze and then nothing. A rank
+ * badge on every row would make a five-row list look like a ransom note. */
+const RANK_TONE = ['#ffd76e', '#d6e2f5', '#e0a06a'];
+
+function BoardColumn({ title, accent, entries }: { title: string; accent: string; entries: Entry[] }) {
   return (
     <div className="flex-1">
-      <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">{title}</h3>
+      <h3 className="gw-eyebrow mb-2 flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
+        {title}
+      </h3>
       {entries.length === 0 ? (
-        <p className="py-3 text-sm text-zinc-600">No times yet — be the first.</p>
+        <p className="py-4 text-sm text-gw-faint">No times yet — be the first.</p>
       ) : (
-        <ol className="flex flex-col gap-1">
+        <ol className="flex flex-col gap-0.5">
           {entries.map((e, i) => (
             <li key={e.id}>
               <Link
                 href={`/result/${e.id}`}
-                className="flex items-baseline gap-2 rounded px-2 py-1 text-sm hover:bg-white/5"
+                className="group flex items-baseline gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.06]"
               >
-                <span className="w-4 tabular-nums text-zinc-600">{i + 1}</span>
-                <span className="flex-1 truncate text-zinc-200">{e.username}</span>
-                <span className="tabular-nums font-medium text-white">
+                <span
+                  className="gw-num w-4 text-center text-xs font-bold"
+                  style={{ color: RANK_TONE[i] ?? 'var(--color-gw-faint)' }}
+                >
+                  {i + 1}
+                </span>
+                <span className="flex-1 truncate text-sm text-gw-ink/90 group-hover:text-gw-ink">
+                  {e.username}
+                </span>
+                <span className="gw-num text-sm font-semibold text-gw-teal">
                   {formatDuration(e.total_ms)}
                 </span>
               </Link>
@@ -63,33 +77,38 @@ export default function Leaderboard() {
   const coast = boards?.find((b) => b.population === tab && b.onlyCoast);
 
   return (
-    <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <h2 className="mb-3 text-center text-lg font-bold text-white">Fastest Times</h2>
+    <div className="gw-panel w-full p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold tracking-tight text-gw-ink">Fastest Times</h2>
+        <span className="gw-eyebrow">Top 5</span>
+      </div>
 
-      <div className="mb-4 flex justify-center gap-1">
+      <div className="mt-3 flex flex-wrap gap-1.5">
         {BOARD_POPULATIONS.map((p) => (
           <button
             key={p}
             onClick={() => setTab(p)}
-            className={`rounded px-3 py-1 text-sm ${
-              tab === p ? 'bg-white font-semibold text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-            }`}
+            data-active={tab === p}
+            className="gw-chip gw-num px-3 py-1 text-xs"
           >
             {formatPopulation(p)}
           </button>
         ))}
       </div>
 
+      <hr className="gw-rule my-4" />
+
       {boards === null ? (
-        <p className="py-6 text-center text-sm text-zinc-600">Loading…</p>
+        <p className="py-8 text-center text-sm text-gw-faint">Loading…</p>
       ) : (
-        <div className="flex gap-6">
-          <BoardColumn title="All cities" entries={regular?.entries ?? []} />
-          <BoardColumn title="Coast only" entries={coast?.entries ?? []} />
+        <div className="flex gap-5">
+          <BoardColumn title="All cities" accent="#4cc9ff" entries={regular?.entries ?? []} />
+          <span className="w-px self-stretch bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+          <BoardColumn title="Coast only" accent="#2ee6c5" entries={coast?.entries ?? []} />
         </div>
       )}
 
-      <p className="mt-4 text-center text-xs leading-relaxed text-zinc-600">
+      <p className="mt-5 text-center text-[11px] leading-relaxed text-gw-faint">
         Sign in and finish all 10 without revealing or reporting a round to rank.
       </p>
     </div>

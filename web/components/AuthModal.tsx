@@ -67,16 +67,21 @@ export default function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 p-6"
+        className="gw-rise gw-panel gw-panel-lit w-full max-w-sm p-6"
+        style={{ ['--gw-tone' as string]: '46 230 197' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-zinc-500 hover:text-white">
+          <h2 className="text-xl font-bold text-gw-ink">{title}</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="gw-btn h-7 w-7 rounded-full text-gw-mute"
+          >
             &times;
           </button>
         </div>
@@ -92,7 +97,7 @@ export default function AuthModal({
                 autoComplete="username"
                 autoFocus
                 maxLength={20}
-                className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-white"
+                className="gw-input px-3 py-2"
               />
               <input
                 type="password"
@@ -100,7 +105,7 @@ export default function AuthModal({
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-white"
+                className="gw-input px-3 py-2"
               />
             </>
           )}
@@ -113,7 +118,7 @@ export default function AuthModal({
               placeholder={mode === 'signup' ? 'Email (optional)' : 'Email'}
               autoComplete="email"
               autoFocus={mode === 'forgot'}
-              className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2 text-white"
+              className="gw-input px-3 py-2"
             />
           )}
 
@@ -121,7 +126,7 @@ export default function AuthModal({
             // Said plainly rather than buried: without an email there is no
             // recovery path at all, and that's a surprising thing to discover
             // only once you've forgotten the password.
-            <p className="text-xs leading-relaxed text-zinc-500">
+            <p className="text-xs leading-relaxed text-gw-faint">
               {emailEnabled
                 ? 'Email is optional, but it’s the only way to reset your password if you forget it.'
                 : 'Password reset isn’t available on this server, so keep your password somewhere safe.'}
@@ -131,28 +136,28 @@ export default function AuthModal({
           <button
             type="submit"
             disabled={busy}
-            className="mt-1 rounded-full bg-white px-6 py-2 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+            className="gw-cta mt-2 px-6 py-2.5"
           >
             {busy ? 'Working…' : title}
           </button>
         </form>
 
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-        {notice && <p className="mt-3 text-sm text-green-400">{notice}</p>}
+        {error && <p className="mt-3 rounded-lg border border-gw-rose/30 bg-gw-rose/10 px-3 py-2 text-sm text-gw-rose">{error}</p>}
+        {notice && <p className="mt-3 rounded-lg border border-gw-teal/30 bg-gw-teal/10 px-3 py-2 text-sm text-gw-teal">{notice}</p>}
 
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-400">
+        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gw-mute">
           {mode !== 'login' && (
-            <button onClick={() => setMode('login')} className="underline hover:text-white">
+            <button onClick={() => setMode('login')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
               Sign in
             </button>
           )}
           {mode !== 'signup' && (
-            <button onClick={() => setMode('signup')} className="underline hover:text-white">
+            <button onClick={() => setMode('signup')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
               Create an account
             </button>
           )}
           {mode !== 'forgot' && emailEnabled && (
-            <button onClick={() => setMode('forgot')} className="underline hover:text-white">
+            <button onClick={() => setMode('forgot')} className="underline decoration-gw-teal/40 underline-offset-4 transition hover:text-gw-teal">
               Forgot password?
             </button>
           )}

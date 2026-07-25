@@ -43,14 +43,14 @@ function ResetInner() {
 
   if (done) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-900 px-4 text-white">
-        <h1 className="text-3xl font-bold">Password changed</h1>
-        <p className="text-center text-zinc-400">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+        <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Password changed</h1>
+        <p className="text-center text-gw-mute">
           You’ve been signed out everywhere. Sign in with your new password.
         </p>
         <Link
           href="/"
-          className="mt-2 rounded-full bg-white px-6 py-2 font-semibold text-black hover:bg-zinc-200"
+          className="mt-2 gw-cta px-6 py-2.5"
         >
           Back to Guesswhere
         </Link>
@@ -59,8 +59,8 @@ function ResetInner() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-900 px-4 text-white">
-      <h1 className="text-3xl font-bold">Choose a new password</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <h1 className="gw-display text-4xl font-black tracking-[0.08em]">Choose a new password</h1>
 
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
         <input
@@ -70,7 +70,7 @@ function ResetInner() {
           placeholder="New password"
           autoComplete="new-password"
           autoFocus
-          className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2"
+          className="gw-input px-3 py-2"
         />
         <input
           type="password"
@@ -78,26 +78,26 @@ function ResetInner() {
           onChange={(e) => setConfirm(e.target.value)}
           placeholder="Confirm new password"
           autoComplete="new-password"
-          className="rounded border border-zinc-600 bg-zinc-800 px-3 py-2"
+          className="gw-input px-3 py-2"
         />
         <button
           type="submit"
           disabled={busy || !token}
-          className="rounded-full bg-white px-6 py-2 font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+          className="gw-cta px-6 py-2.5"
         >
           {busy ? 'Working…' : 'Set new password'}
         </button>
       </form>
 
-      {!token && <p className="text-sm text-red-400">This link is missing its token.</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {!token && <p className="text-sm text-gw-rose">This link is missing its token.</p>}
+      {error && <p className="text-sm text-gw-rose">{error}</p>}
     </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-900" />}>
+    <Suspense fallback={<div className="min-h-screen" />}>
       <ResetInner />
     </Suspense>
   );
