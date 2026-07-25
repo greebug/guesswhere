@@ -332,6 +332,33 @@ behaviour by `verify-eliminated.mjs`, but nothing is ever seen rendered. Jesse h
 confirmed the original grey tint and the "City, Country" answer live; **the green/amber
 colors and the island bucket thresholds have not been looked at by anyone yet.**
 
+## OPEN RIGHT NOW — visual review pending (2026-07-25)
+
+The "night atlas" redesign shipped (`66801f6`) and **nobody has looked at it yet** —
+the sandbox can't screenshot, so it was built and verified entirely without being
+seen. Jesse reviews by pasting screenshots; expect a round of feedback. The things
+most likely to be wrong are the ones DOM inspection can't catch:
+
+- whether Fraunces at hero size actually has the character it's meant to,
+- whether the flat opaque panels now read as *too* plain against satellite imagery,
+- whether the warm-ink-on-cold-ground pairing holds up at full size.
+
+**What the equivalent review found on the sister game (BingBongBlitz), because the
+same mistakes are likely here:** the "AI font" complaint turned out to be literal —
+browsers don't inherit `font-family` into `button`/`input`/`textarea`/`select`, so
+every form control silently rendered in Arial. **Guesswhere has not been checked for
+this.** Worth running before the next visual pass:
+
+```js
+// in the preview tab, list any text element not using a brand font
+[...document.querySelectorAll('body *')]
+  .filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()))
+  .filter(e => !/Fraunces|Archivo|IBM Plex Mono/.test(getComputedStyle(e).fontFamily))
+```
+
+Guesswhere styles most controls through `gw-btn` / `gw-input` / `gw-cta`, which set
+their own font — but any bare `<button>` or `<input>` would be in Arial right now.
+
 ## OPEN RIGHT NOW — read this first (as of 2026-07-23)
 
 Everything from the 2026-07-22 post-`76b8607` polish pass (end-of-game report rework,
