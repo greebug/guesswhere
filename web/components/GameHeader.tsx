@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { formatDuration } from '@/lib/boards';
-import { api } from '@/lib/basePath';
+import { api, BASE_PATH } from '@/lib/basePath';
 
 interface HeaderRound {
   solved: boolean;
@@ -133,7 +133,13 @@ export default function GameHeader({
       const res = await fetch(api(`/api/game/${gameId}/clone`), { method: 'POST' });
       if (!res.ok) throw new Error('failed to create share link');
       const data = await res.json();
-      await navigator.clipboard.writeText(`${window.location.origin}/play/${data.gameId}`);
+      // BASE_PATH explicitly: next.config's basePath rewrites <Link> and
+      // router.push(), but a URL assembled by hand from window.location.origin
+      // is just a string and gets no prefix -- so this copied a link to
+      // bingbongblitz.com/play/... , which 404s.
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${BASE_PATH}/play/${data.gameId}`
+      );
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 1500);
     } catch {

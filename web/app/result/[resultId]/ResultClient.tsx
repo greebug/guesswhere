@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import ResultMap from '@/components/ResultMap';
 import RoundBreakdown, { type BreakdownRound } from '@/components/RoundBreakdown';
 import { formatDuration, formatPopulation } from '@/lib/boards';
@@ -19,8 +20,28 @@ interface ResultView {
 }
 
 export default function ResultClient({ resultId }: { resultId: string }) {
+  const router = useRouter();
   const [result, setResult] = useState<ResultView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [replayState, setReplayState] = useState<'idle' | 'working' | 'failed'>('idle');
+  const [replayError, setReplayError] = useState<string | null>(null);
+
+  // Take on the exact cities behind this run, in the same order. Built from
+  // the result's own snapshot rather than the original game session, so it
+  // still works for a result whose session was pruned months ago.
+  async function playThisSet() {
+    setReplayState('working');
+    setReplayError(null);
+    try {
+      const res = await fetch(api(`/api/result/${resultId}/replay`), { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'could not start that set');
+      router.push(`/play/${data.gameId}`);
+    } catch (e) {
+      setReplayState('failed');
+      setReplayError(e instanceof Error ? e.message : 'could not start that set');
+    }
+  }
 
   useEffect(() => {
     fetch(api(`/api/result/${resultId}`))
@@ -52,10 +73,23 @@ export default function ResultClient({ resultId }: { resultId: string }) {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-8">
-      <div className="w-full max-w-xl">
+      <div className="flex w-full max-w-xl items-start justify-between gap-3">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
           &larr; Guesswhere
         </Link>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={playThisSet}
+            disabled={replayState === 'working'}
+            className="gw-btn gw-tone-verdigris px-3 py-1.5 text-sm"
+          >
+            {replayState === 'working' ? 'Starting…' : 'Play this set'}
+          </button>
+          <p className="text-right text-xs text-gw-mute">
+            {replayError ?? 'Same ten cities · doesn’t rank'}
+          </p>
+        </div>
       </div>
 
       <div className="w-full max-w-xl text-center">

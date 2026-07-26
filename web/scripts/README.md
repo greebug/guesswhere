@@ -16,6 +16,8 @@ node scripts/verify-game.mjs     # 44 checks: auth, active-time accrual, leaderb
 node scripts/verify-email.mjs    # 24 checks: verify/reset token handling
 node --experimental-strip-types scripts/verify-appurl.mjs   # 12 checks: emailed-link origin resolution
 node scripts/verify-eliminated.mjs   # 13 checks: country-on-answer, the eliminated-country hint, one-country-per-game
+node scripts/verify-replay.mjs   # 27 checks: "Play this set" on a result page
+node scripts/verify-sso.mjs      # 24 checks: the domain-wide session cookie other games read
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 
@@ -54,6 +56,20 @@ America" alongside GeoNames' "United States", and so on), and the old string-key
 ~12% of 50k-floor games quietly contain two cities from the same real country. That was
 harmless-ish on its own and became load-bearing the moment the minimap started greying out
 eliminated countries — a wrong "India is out of play" is worse than no hint at all.
+
+## The two newer ones
+
+`verify-replay.mjs` finishes a real game, then **deletes its `games` row** before
+replaying from the result. That single check is the reason the endpoint exists at all:
+results are permanent, sessions are pruned at 30 days, and the older `/clone` route reads
+the session. The script asserts `/clone` 404s at that point and replay still works.
+
+`verify-sso.mjs` reads raw `Set-Cookie` **attributes**, not just behaviour, because the
+attribute *is* the mechanism — a session cookie with the wrong `Path` is simply never sent
+to Blitz, and the symptom is the vague "it sometimes forgets me" rather than an error. It
+also reproduces a pre-consolidation browser (a `gw_session` cookie and nothing else) and
+asserts it still authenticates and gets upgraded, since getting that wrong logs everyone
+out on deploy.
 
 ## What these do NOT cover
 

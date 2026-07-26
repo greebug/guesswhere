@@ -11,19 +11,34 @@ import {
 } from './gameDb';
 import { BASE_PATH } from '../basePath';
 
-export const SESSION_COOKIE = 'gw_session';
+// Guesswhere's accounts are the identity for every game on bingbongblitz.com,
+// so the session cookie is scoped to the whole domain: riding along on the
+// other games' requests is now the POINT, not a leak. (It used to be pinned to
+// '/guesswhere' precisely so it wouldn't -- that reasoning is superseded.)
+// `cookies().set` does not apply next.config's basePath on its own, so both
+// the name and the path here are explicit.
+export const SESSION_COOKIE = 'bbb_session';
+const SESSION_COOKIE_PATH = '/';
 
-// Scoped to Guesswhere's mount point rather than '/'. bingbongblitz.com serves
-// three other games from the same origin, and a '/'-scoped cookie would ride
-// along on every one of their requests. `cookies().set` does not apply
-// next.config's basePath on its own, so this is explicit.
+// The pre-consolidation cookie, still honoured on read so nobody who was
+// signed in gets kicked out by the deploy. /api/auth/me upgrades a legacy-only
+// visitor to the new cookie on their first page view.
 //
-// Whatever this is, `store.delete` must pass the SAME path -- the browser
-// matches cookies for deletion on name+domain+path, so deleting with the
-// default '/' would silently leave a '/guesswhere'-scoped session in place and
-// sign-out would appear to do nothing.
-const SESSION_COOKIE_PATH = BASE_PATH;
+// Renamed rather than re-pathed on purpose: two cookies both named
+// `gw_session` at different paths would BOTH be sent on a /guesswhere request,
+// arriving as an unordered pair the server can't tell apart.
+export const LEGACY_SESSION_COOKIE = 'gw_session';
+const LEGACY_SESSION_COOKIE_PATH = BASE_PATH;
+
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Local cross-game testing runs Guesswhere in production mode (NODE_ENV=production)
+// behind `wrangler dev` over plain http, where a Secure cookie is silently
+// dropped by the browser and single sign-on looks broken for a reason that has
+// nothing to do with the code. Never set this on Railway.
+function cookieSecure(): boolean {
+  return process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIE !== '1';
+}
 
 // scrypt from node:crypto rather than bcrypt/argon2: those are native modules
 // that would need a build toolchain in the Dockerfile, and scrypt is a
@@ -146,7 +161,7 @@ export async function startSession(userId: string): Promise<void> {
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     path: SESSION_COOKIE_PATH,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
@@ -154,18 +169,53 @@ export async function startSession(userId: string): Promise<void> {
 
 export async function endSession(): Promise<void> {
   const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (token) deleteSession(hashToken(token));
-  store.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
+  for (const [name, path] of [
+    [SESSION_COOKIE, SESSION_COOKIE_PATH],
+    [LEGACY_SESSION_COOKIE, LEGACY_SESSION_COOKIE_PATH],
+  ] as const) {
+    const token = store.get(name)?.value;
+    if (token) deleteSession(hashToken(token));
+    // Each must be deleted at ITS OWN path: browsers match cookies for
+    // deletion on name+domain+path, so one delete call can't clear both.
+    store.delete({ name, path });
+  }
 }
 
 /** The current signed-in user, or null. Safe to call from route handlers and
  * server components alike (it only reads). */
 export async function getCurrentUser(): Promise<UserRow | null> {
   const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
+  const token =
+    store.get(SESSION_COOKIE)?.value ?? store.get(LEGACY_SESSION_COOKIE)?.value;
   if (!token) return null;
   return readSessionUser(hashToken(token), Date.now());
+}
+
+/**
+ * Moves a still-valid pre-consolidation session onto the domain-wide cookie,
+ * so an already-signed-in player is recognised by the other games without
+ * having to sign in again. No-op unless the legacy cookie is the only one
+ * present.
+ *
+ * Route-handler only, for the same reason as startSession. The session row
+ * itself is reused rather than reissued -- the token is unchanged, only where
+ * the browser files it.
+ */
+export async function upgradeLegacySessionCookie(): Promise<void> {
+  const store = await cookies();
+  if (store.get(SESSION_COOKIE)) return;
+  const token = store.get(LEGACY_SESSION_COOKIE)?.value;
+  if (!token) return;
+  if (!readSessionUser(hashToken(token), Date.now())) return;
+
+  store.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: cookieSecure(),
+    path: SESSION_COOKIE_PATH,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+  });
+  store.delete({ name: LEGACY_SESSION_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
 }
 
 // ---------------------------------------------------------------------------

@@ -52,8 +52,9 @@ in-memory `Map`.
 settled and built.
 
 - **Accounts** — username + password, `lib/server/auth.ts`. scrypt via `node:crypto`
-  (no native module, so nothing extra in the Dockerfile), httpOnly `gw_session` cookie
-  with only `sha256(token)` in the DB. Email is **optional**; a *verified* email is what
+  (no native module, so nothing extra in the Dockerfile), httpOnly `bbb_session` cookie
+  with only `sha256(token)` in the DB. **These are now the accounts for every game on
+  bingbongblitz.com** — see "Single sign-on" below. Email is **optional**; a *verified* email is what
   unlocks password reset, so a mail problem can never block someone from playing.
   Mail goes out via **Resend's REST API** (`lib/server/email.ts`) — plain `fetch`, no npm
   dependency. Needs `RESEND_API_KEY` and `APP_URL`; without them every email feature hides
@@ -115,6 +116,13 @@ Until these are set, accounts work fine and every email feature hides itself
 Cloudflare-based plan, and the command doesn't exist in the pinned wrangler (4.59.1;
 checked, it isn't in `wrangler --help` at all). Cloudflare is no longer the mail path.
 
+**Since single sign-on, this repo is no longer deployable on its own.** Guesswhere issues
+the session cookie every game on the domain reads, so a change to `lib/server/auth.ts`
+affects Blitz too. Deploy **Guesswhere first**, then `dutch-blitz` — order is a preference
+rather than a hazard (Blitz-first just means everyone is a guest for a few minutes), but
+that direction never has a broken window. The hub Worker needs **no** redeploy: the whole
+mechanism rides paths it already routes. See "Single sign-on" below.
+
 **Two real bugs found and fixed after initial ship — worth knowing about if touching
 these areas again:**
 - **Duels' black screen** (`web/app/duel/[lobbyId]/DuelClient.tsx`): the round-
@@ -170,9 +178,12 @@ What this changed inside `web/`, and why each piece matters:
   you happen to hit the origin directly** — that's the trap to watch for.
 - **`/rivers.json`** (`lib/minimapStyle.ts`) is a plain public asset, so it
   needed the prefix explicitly too. Same rule as fetch.
-- **The `gw_session` cookie is scoped to `/guesswhere`**, not `/` — three other
-  games share this origin now. `cookies().delete` must pass the **same path**,
-  or sign-out silently fails: browsers match cookies for deletion on
+- **The session cookie used to be scoped to `/guesswhere`** so it wouldn't ride
+  along on the other three games' requests. **That is no longer true** — riding
+  along is the whole point now (see "Single sign-on" below), and the cookie is
+  `bbb_session` at `Path=/`. The deletion rule still bites either way:
+  `cookies().delete` must pass the **same path** the cookie was set with, or
+  sign-out silently fails — browsers match cookies for deletion on
   name+domain+path.
 - **`appUrl()` still returns the ORIGIN only** (its 12 tests depend on that);
   `lib/server/email.ts` appends `BASE_PATH`. Set `APP_URL=https://bingbongblitz.com`
@@ -190,6 +201,63 @@ upgrade. **This has since shipped** — `basePath` is on `origin/master` and the
 game serves from `bingbongblitz.com/guesswhere`. (This paragraph read "not yet
 deployed — nothing has been pushed" for a while after it was no longer true;
 check `git log origin/master` before repeating a deploy-status claim from here.)
+
+## Single sign-on: Guesswhere owns accounts for the whole domain (2026-07-26)
+
+One account now covers every game on bingbongblitz.com. Guesswhere is the identity
+provider — it already had real accounts (scrypt passwords, optional verified email,
+password reset), and Blitz had a 4-digit PIN keyed by typed name in a different database
+on a different Railway service. **The PIN sign-on is retired.**
+
+**The mechanism is one cookie and one endpoint. There is no shared secret, no token
+format, and no change to the hub Worker** — every game is already same-origin under
+bingbongblitz.com, so `/guesswhere/api/auth/*` was reachable from all of them all along.
+
+- **`bbb_session` at `Path=/`** (`lib/server/auth.ts`), so it rides every game's requests.
+  Renamed rather than re-pathed **on purpose**: two cookies both named `gw_session` at
+  different paths would BOTH be sent on a `/guesswhere` request and arrive as an
+  unordered pair the server can't tell apart.
+- **`gw_session` is still honoured on read**, and `/api/auth/me` silently upgrades a
+  legacy-only visitor to the new cookie (same session token, just refiled). Every page
+  mounts `useCurrentUser()`, which calls that route, so nobody signed in got logged out by
+  the deploy. `endSession()` deletes **both**, each at its own path.
+- **Other games' servers authenticate by forwarding the cookie to
+  `GET /guesswhere/api/auth/me`** and taking the answer as authoritative. That contract is
+  asserted by `verify-sso.mjs` §4, not assumed. Chosen over an HMAC-signed identity token:
+  one source of truth, nothing to rotate, and no window where a revoked session still
+  works elsewhere. Guesswhere being unreachable degrades to guest play.
+- **`ALLOW_INSECURE_COOKIE=1`** drops the `Secure` flag. Local cross-game testing runs
+  Guesswhere in production mode behind `wrangler dev` over plain http, where a `Secure`
+  cookie is silently dropped by the browser and SSO looks broken for a reason that has
+  nothing to do with the code. **Never set it on Railway.**
+
+Blitz's half lives in `../dutch-blitz` — schema migration, socket.io middleware, and the
+leaderboard cutover that keeps its existing records live. See that repo's `NEXT.md`.
+
+## "Play this set" — replaying a result (2026-07-26)
+
+A result page (`/result/[id]`, the detail page behind every leaderboard row) has a **Play
+this set** button: the same ten cities in the same order, as an independent playthrough.
+
+`POST /api/result/[resultId]/replay` builds it from **`game_results`, not the `games`
+table**, and that is the entire reason it isn't just a call to the existing
+`/api/game/[id]/clone`. A result row is a permanent self-contained snapshot; the session
+it came from is pruned after 30 days, so `/clone` 404s on any result older than that —
+which is most of the leaderboard. `verify-replay.mjs` §4 asserts exactly this by deleting
+the session first.
+
+- `isClone: true`, so a replay **never ranks** — the times are printed on the page you
+  started from.
+- The report blocklist is deliberately **not** applied: a verbatim rerun of one historical
+  set, silently swapping a city out would make the two runs incomparable.
+- A city that has left the corpus → **410**, not a broken round. The snapshot carries
+  lat/lon but not `min_render_zoom`, so the map couldn't frame it anyway.
+
+**Fixed alongside it, same class of bug as the `fetch`/`api()` trap:** "Share Cities" in
+both `GameHeader` and `GameReport` built its clipboard URL as
+`${window.location.origin}/play/${id}` — `basePath` rewrites `<Link>` and `router.push()`,
+but a URL assembled by hand is just a string, so every shared link pointed at
+`bingbongblitz.com/play/...` and 404'd. Both now use `BASE_PATH` explicitly.
 
 ## The visual system — "night atlas" (2026-07-25)
 
@@ -495,7 +563,7 @@ Why it's clean: controls go through `gw-btn` / `gw-input` / `gw-cta`, which set 
 font. A bare `<button>` or `<input>` added later would silently be Arial, so this sweep is
 worth repeating after any batch of new UI.
 
-## OPEN RIGHT NOW — read this first (as of 2026-07-23)
+## OPEN RIGHT NOW — read this first (2026-07-23, plus a 2026-07-26 subsection at the end)
 
 Everything from the 2026-07-22 post-`76b8607` polish pass (end-of-game report rework,
 duel round colors, minimap logo clearance, popup contrast, urban-fabric shading, country
@@ -638,10 +706,33 @@ specifically shows it as crashed (a dashboard badge? a restart count? an email?)
 there's an earlier failed attempt in the same deploy's logs, to share that part
 specifically.
 
-**Verification scripts live in `web/scripts/`** — 80 checks across accounts, active-time
-accrual, leaderboards, prune safety, email tokens, and emailed-link origins. See
-`web/scripts/README.md`. Run these before believing any change to those areas is safe;
-the sandbox can't click through the UI, so this is how server behaviour gets proven.
+**Verification scripts live in `web/scripts/`** — 144 checks across accounts, active-time
+accrual, leaderboards, prune safety, email tokens, emailed-link origins, the shared
+session cookie, and result replay. See `web/scripts/README.md`. Run these before believing
+any change to those areas is safe; the sandbox can't click through the UI, so this is how
+server behaviour gets proven.
+
+### OPEN — carried over from the single-sign-on work (2026-07-26)
+
+Everything in "Single sign-on" and "Play this set" below is built and verified as far as
+this machine allows, but **two things need Jesse, and one of them is a deploy blocker**:
+
+1. **`GUESSWHERE_ORIGIN=https://bingbongblitz.com` has to be set on the `dutch-blitz`
+   Railway service.** It defaults to that value, so it's belt-and-braces rather than
+   strictly required — but set it explicitly, because the default is the one thing
+   silently holding cross-game sign-in together.
+2. **Blitz's Postgres migration was never actually run.** The `ALTER TABLE`s in
+   `../dutch-blitz/server/index.ts`'s `initDb()` are unverified: there is no Postgres,
+   Docker or `psql` on this machine. **The failure mode is nasty** — without a
+   `DATABASE_URL` that server disables accounts entirely and everything degrades to guest,
+   which looks exactly like a passing test. Check the first deploy's boot logs (it prints
+   `Dropped UNIQUE constraint … on accounts.name_lower`), or run the four statements by
+   hand first. All are additive or constraint drops, so re-running them is safe.
+
+Also worth knowing: nothing here has been *seen* by Jesse yet — the "Play this set" button
+was driven through the real DOM (click → 200 → correct new game) and measured at 320/375px,
+but the sandbox still can't screenshot. Blitz's rebuilt sign-in modal has not been looked
+at in a browser at all.
 
 ## The one thing to never break
 

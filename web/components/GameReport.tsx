@@ -5,7 +5,7 @@ import { useState } from 'react';
 import ResultMap from './ResultMap';
 import RoundBreakdown, { type BreakdownRound } from './RoundBreakdown';
 import { formatDuration } from '@/lib/boards';
-import { api } from '@/lib/basePath';
+import { api, BASE_PATH } from '@/lib/basePath';
 
 export interface ReportRound extends BreakdownRound {
   lat: number;
@@ -37,7 +37,11 @@ export default function GameReport({ summary }: { summary: GameSummary }) {
       const res = await fetch(api(`/api/game/${summary.gameId}/clone`), { method: 'POST' });
       if (!res.ok) throw new Error('failed to create share link');
       const data = await res.json();
-      await navigator.clipboard.writeText(`${window.location.origin}/play/${data.gameId}`);
+      // BASE_PATH explicitly -- see the identical call in GameHeader: a URL
+      // built by hand off window.location.origin gets no basePath rewrite.
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${BASE_PATH}/play/${data.gameId}`
+      );
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 1500);
     } catch {

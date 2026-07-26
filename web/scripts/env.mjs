@@ -31,24 +31,35 @@ export const CITIES_DB = env.CITIES_DB;
 if (!GAME_DB) throw new Error('GAME_DB_PATH missing from web/.env.local');
 if (!CITIES_DB) throw new Error('CITIES_DB missing from web/.env.local');
 
+/** Session cookie names, newest first. `bbb_session` is the domain-wide one
+ * every game on bingbongblitz.com reads; `gw_session` is the pre-consolidation
+ * Guesswhere-only cookie, still honoured on read and upgraded by
+ * /api/auth/me. Scripts need both so they can exercise that upgrade. */
+export const SESSION_COOKIES = ['bbb_session', 'gw_session'];
+
 /** Minimal cookie jar -- the session cookie is httpOnly, so these scripts have
- * to carry it the same way a browser would. */
-export function makeClient() {
-  let cookie = '';
+ * to carry it the same way a browser would. Paths are ignored: everything here
+ * talks to one origin, and the two cookie names never collide. */
+export function makeClient(initialCookies = {}) {
+  const jar = new Map(Object.entries(initialCookies));
   return async function req(path, init = {}) {
     const headers = { ...(init.headers ?? {}) };
-    if (cookie) headers.Cookie = cookie;
+    const sending = [...jar].filter(([, v]) => v !== '');
+    if (sending.length) headers.Cookie = sending.map(([k, v]) => `${k}=${v}`).join('; ');
     if (init.body) headers['Content-Type'] = 'application/json';
     const res = await fetch(BASE + path, { ...init, headers, redirect: 'manual' });
-    for (const c of res.headers.getSetCookie?.() ?? []) {
+    const setCookies = res.headers.getSetCookie?.() ?? [];
+    for (const c of setCookies) {
       const [pair] = c.split(';');
-      if (pair.split('=')[0] === 'gw_session') cookie = pair;
+      const eq = pair.indexOf('=');
+      const name = pair.slice(0, eq);
+      if (SESSION_COOKIES.includes(name)) jar.set(name, pair.slice(eq + 1));
     }
     let body = null;
     try {
       body = await res.json();
     } catch {}
-    return { status: res.status, body };
+    return { status: res.status, body, setCookies, jar };
   };
 }
 
