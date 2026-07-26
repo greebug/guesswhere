@@ -423,11 +423,29 @@ never touches the Raster Tiles API that `tools/imagery-compare.html` warns about
 tile count, ~2-3x the bytes. **If you ever replace this with a self-declared raster
 source and explicit `tiles: [...]` URLs, that invariant *does* break.**
 
-**Second, separate bug found while measuring, NOT yet fixed:** the "25 miles wide"
-framing spec isn't what reaches the screen. Because the 16:9 box makes height the binding
-constraint, a maximized 1920x1080 window shows **~31 miles across**, not 25 — and that's
-*wider* than the old framing's 29.3. The box only delivers 25mi on a window that is
-exactly 16:9 or narrower. Jesse knows; he chose to fix the blur first.
+**Second, separate bug found while measuring — now also fixed:** the "25 miles wide"
+framing spec wasn't what reached the screen. Handing a 25mi x 14.1mi (16:9) box to
+`cameraForBounds` fits whichever axis binds, and that box is narrower than any maximized
+desktop window, so **height** bound it — a maximized 1920x1080 window showed **~31 miles
+across**, wider even than the 29.3mi framing it replaced.
+
+`MainMap.tsx` now computes the zoom from **width alone** (`zoomForWidthKm`) and uses
+`jumpTo` rather than `fitBounds`. Mercator's x axis is exactly linear in longitude, with
+no latitude term, so width-fitting is exact everywhere — measured live by unprojecting
+the real screen edges: **24.972 mi** in a 2560x1220 window (the 0.03 is haversine's R=6371
+against `KM_PER_DEG_LAT = 111.32`, a model difference, not an error). Checked across
+8 viewports x 5 latitudes: deviation from 25.000 is ~1e-14 mi.
+
+**Do not "simplify" this back to `fitBounds` on a box.** A box fit re-introduces exactly
+this bug the moment the container is wider than the box.
+
+**The pan box grows on tall viewports, on purpose.** It's 75mi x 42.2mi, but a 25mi-wide
+view is *taller* than 42.2mi on anything past ~1.69:1 portrait (a 390x844 iPhone shows
+44.9mi), and Mapbox resolves a viewport that doesn't fit inside `maxBounds` by zooming in
+until it does — silently overriding the 25mi width on phones. It was already doing that
+before this change. `settle()` now raises the box's height to cover the view when needed
+(+2% so rounding can't re-trigger the clamp). The box **width** stays exactly 75.0000mi,
+which is the number Jesse measured and confirmed.
 
 **A note on method, because the arithmetic here is easy to get wrong by reimplementing
 it:** the `cameraForBounds` model was validated by computing a zoom by hand and checking

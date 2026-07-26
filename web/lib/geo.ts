@@ -1,5 +1,14 @@
 const KM_PER_DEG_LAT = 111.32;
 
+/**
+ * Degrees of longitude spanned by `km` at latitude `lat`. Meridians converge
+ * toward the poles, so this widens with latitude; the cosine is clamped so a
+ * point near a pole can't ask for an infinite span.
+ */
+export function lonDegreesForKm(lat: number, km: number): number {
+  return km / (KM_PER_DEG_LAT * Math.max(0.05, Math.cos((lat * Math.PI) / 180)));
+}
+
 /** Bounding box [west, south, east, north] `widthKm` x `heightKm` around a center point. */
 export function boxAroundCenter(
   lat: number,
@@ -8,7 +17,7 @@ export function boxAroundCenter(
   heightKm: number
 ): [number, number, number, number] {
   const dLat = heightKm / 2 / KM_PER_DEG_LAT;
-  const dLon = widthKm / 2 / (KM_PER_DEG_LAT * Math.max(0.05, Math.cos((lat * Math.PI) / 180)));
+  const dLon = lonDegreesForKm(lat, widthKm) / 2;
   return [lon - dLon, lat - dLat, lon + dLon, lat + dLat];
 }
 

@@ -3,23 +3,28 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { boxAroundCenter, distanceKm } from '@/lib/geo';
+import { boxAroundCenter, lonDegreesForKm, distanceKm } from '@/lib/geo';
 
 // PLAN.md: main view is pure satellite imagery, no vector layers/labels/
 // overlays -- and billed as ONE GL JS map load per game (instantiate once,
 // reposition via jumpTo/easeTo between rounds), never the raster tile API.
 //
-// Per request (2026-07-24): initial/max-zoom framing is 25mi wide at 16:9,
-// full pan scope is 75mi wide at 16:9 (both explicit width targets, not
-// derived from the earlier measured-vs-original-game baseline below).
+// Per request (2026-07-24): initial/max-zoom framing is 25mi wide, full pan
+// scope is 75mi wide (both explicit width targets, not derived from the
+// earlier measured-vs-original-game baseline).
 const MI_PER_KM = 1 / 1.609344;
 const WIDE_WIDTH_KM = 25 / MI_PER_KM; // 40.23
-const WIDE_HEIGHT_KM = WIDE_WIDTH_KM * (9 / 16); // 22.63
 const PAN_WIDTH_KM = 75 / MI_PER_KM; // 120.70
 const PAN_HEIGHT_KM = PAN_WIDTH_KM * (9 / 16); // 67.89
 const PINPOINT_WIDTH_KM = 3;
 const PINPOINT_HEIGHT_KM = 1.5;
 const MAX_ZOOM = 18; // matches measured Esri/Mapbox fidelity ceiling in most regions
+
+// GL JS's projection is always 512 CSS px per world tile, regardless of the
+// 256px tiles the satellite SOURCE happens to serve. The two numbers are easy
+// to confuse and they mean different things -- see the tile-cliff note below.
+const PROJECTION_TILE_PX = 512;
+const EARTH_CIRCUMFERENCE_KM = 40075.017;
 
 // satellite-v9's raster source is declared `tileSize: 256` with `roundZoom`
 // (read off the live map, not assumed), so the tile level it actually draws is
@@ -68,13 +73,45 @@ function upgradeToRetinaTile(url: string, resourceType?: string) {
   return { url: parsed.toString() };
 }
 
-// Recomputes and reapplies the "can't zoom out past 27km wide" floor for the
-// container's CURRENT size. Must be re-run on every resize, not just once --
-// see the `resize` listener below for why.
-function applyWideZoomFloor(map: mapboxgl.Map, lat: number, lon: number) {
-  const wideBounds = boxAroundCenter(lat, lon, WIDE_WIDTH_KM, WIDE_HEIGHT_KM);
-  const camera = map.cameraForBounds(wideBounds);
-  const minZoom = camera && typeof camera.zoom === 'number' ? camera.zoom : 10;
+/**
+ * The zoom at which `widthKm` spans exactly `widthPx` of screen.
+ *
+ * Fitted on WIDTH ALONE, deliberately. This used to hand a 25mi x 14.1mi (16:9)
+ * box to `cameraForBounds`, which fits whichever axis is more constraining --
+ * and since that box is narrower than any maximized desktop window, HEIGHT won.
+ * The result was that the "25 miles across" spec never reached the screen: a
+ * maximized 1920x1080 window showed ~31 miles, wider even than the 29.3mi
+ * framing this replaced. Width-fitting delivers 25mi on every window shape,
+ * because Mercator's x axis is exactly linear in longitude -- no latitude term,
+ * unlike the y axis, which is what made the box fit drift in the first place.
+ *
+ * Returns null before the container has been laid out (clientWidth 0), where
+ * the log would be -Infinity.
+ */
+function zoomForWidthKm(widthPx: number, lat: number, widthKm: number): number | null {
+  if (!(widthPx > 0)) return null;
+  const worldFraction = lonDegreesForKm(lat, widthKm) / 360;
+  return Math.log2(widthPx / (PROJECTION_TILE_PX * worldFraction));
+}
+
+/** How many km of ground the container's height covers at `zoom`. */
+function visibleHeightKm(heightPx: number, lat: number, zoom: number): number {
+  const kmPerPx =
+    (EARTH_CIRCUMFERENCE_KM * Math.cos((lat * Math.PI) / 180)) /
+    (PROJECTION_TILE_PX * Math.pow(2, zoom));
+  return heightPx * kmPerPx;
+}
+
+/**
+ * Recomputes and reapplies the "can't zoom out past 25 miles wide" floor for
+ * the container's CURRENT size. Must be re-run on every resize, not just once
+ * -- see the `resize` listener below for why. `setMinZoom` also clamps the
+ * current zoom up if it now sits below the floor, which is what keeps the
+ * opening view exactly on spec without a separate jump.
+ */
+function applyWideZoomFloor(map: mapboxgl.Map, lat: number) {
+  const minZoom = zoomForWidthKm(map.getContainer().clientWidth, lat, WIDE_WIDTH_KM);
+  if (minZoom === null) return;
   map.setMinZoom(minZoom);
 }
 
@@ -118,14 +155,17 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     }
     mapboxgl.accessToken = token;
 
-    // Constructed already framed to the wide-view box, not a fixed center/zoom
-    // -- otherwise the map shows an arbitrary zoom-10 view for a moment before
-    // the round-positioning effect below fits it to the real bounds once the
-    // style loads, which reads as a visible "zooms out then back in" flash.
+    // Constructed already framed at the wide view, not at an arbitrary default
+    // -- otherwise the map shows a zoom-10 view for a moment before the
+    // round-positioning effect below frames it once the style loads, which
+    // reads as a visible "zooms out then back in" flash. The container is laid
+    // out by now (this runs in an effect), so the exact zoom is already
+    // computable; the `?? 10` only covers a zero-width container.
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/satellite-v9',
-      bounds: boxAroundCenter(lat, lon, WIDE_WIDTH_KM, WIDE_HEIGHT_KM),
+      center: [lon, lat],
+      zoom: zoomForWidthKm(containerRef.current.clientWidth, lat, WIDE_WIDTH_KM) ?? 10,
       maxZoom: MAX_ZOOM,
       attributionControl: false,
       dragRotate: false,
@@ -135,9 +175,9 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
     mapRef.current = map;
 
-    // The "27km wide, can't zoom out further" cap is viewport-size-dependent
-    // (cameraForBounds computes zoom from the container's CSS pixel
-    // dimensions), and Mapbox only recalculates it when we ask it to. Without
+    // The "25 miles wide, can't zoom out further" cap is viewport-size-dependent
+    // (the zoom is computed from the container's CSS pixel width), and Mapbox
+    // only recalculates it when we ask it to. Without
     // this, a container that grows AFTER mount -- a browser window spanning
     // dual monitors, or the whole page shrinking via Ctrl/Cmd "-" (which
     // increases the CSS-pixel viewport, since browser zoom is a CSS-pixel
@@ -147,7 +187,7 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     // reapplying the constraint there closes both holes. setMinZoom's
     // documented behavior auto-clamps the current zoom if it's now below the
     // recomputed minimum, so this doesn't need to also force a zoom itself.
-    map.on('resize', () => applyWideZoomFloor(map, centerRef.current.lat, centerRef.current.lon));
+    map.on('resize', () => applyWideZoomFloor(map, centerRef.current.lat));
 
     return () => {
       map.remove();
@@ -162,27 +202,44 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     if (!map) return;
     centerRef.current = { lat, lon };
 
-    // Applied immediately AND again below once the style is ready --
-    // cameraForBounds is pure geometry (container size + target bounds), it
-    // doesn't need a loaded style, so there's no reason for the zoom floor
-    // to wait on 'load' the way fitBounds/setMaxBounds still do. Without
-    // this, minZoom stayed unset (or the previous round's value) for a real
-    // window on every round transition, not just the first -- fast enough
-    // scrolling right as a round started could zoom out to see the whole
-    // world before settle() got a chance to run.
-    applyWideZoomFloor(map, lat, lon);
+    // Applied immediately AND again below once the style is ready -- the zoom
+    // floor is pure geometry (container width + target width), it doesn't need
+    // a loaded style, so there's no reason for it to wait on 'load' the way
+    // setMaxBounds/the recenter still do. Without this, minZoom stayed unset
+    // (or the previous round's value) for a real window on every round
+    // transition, not just the first -- fast enough scrolling right as a round
+    // started could zoom out to see the whole world before settle() ran.
+    applyWideZoomFloor(map, lat);
 
     const settle = () => {
-      applyWideZoomFloor(map, lat, lon);
-      const panBounds = boxAroundCenter(lat, lon, PAN_WIDTH_KM, PAN_HEIGHT_KM);
-      map.setMaxBounds(panBounds);
-      const wideBounds = boxAroundCenter(lat, lon, WIDE_WIDTH_KM, WIDE_HEIGHT_KM);
-      map.fitBounds(wideBounds, { animate: false });
+      applyWideZoomFloor(map, lat);
+      const container = map.getContainer();
+      const wideZoom = zoomForWidthKm(container.clientWidth, lat, WIDE_WIDTH_KM);
+
+      // The pan box is 75mi x 42.2mi. On a tall enough viewport (roughly
+      // taller than 1.69x its width -- reachable on a phone in portrait) the
+      // 25mi-wide view is TALLER than that box, and Mapbox resolves a viewport
+      // that doesn't fit inside maxBounds by zooming in until it does. That
+      // would silently override the 25mi width on exactly the devices with the
+      // least screen to spare, so the box grows to cover the view when it has
+      // to. The 2% margin keeps rounding from re-triggering the same clamp.
+      const panHeightKm =
+        wideZoom === null
+          ? PAN_HEIGHT_KM
+          : Math.max(PAN_HEIGHT_KM, visibleHeightKm(container.clientHeight, lat, wideZoom) * 1.02);
+      map.setMaxBounds(boxAroundCenter(lat, lon, PAN_WIDTH_KM, panHeightKm));
+
+      // jumpTo, not fitBounds: fitBounds fits whichever axis binds, which is
+      // the whole reason the 25mi spec wasn't reaching the screen. The zoom is
+      // already known exactly, so set it directly.
+      if (wideZoom !== null) map.jumpTo({ center: [lon, lat], zoom: wideZoom });
+      else map.jumpTo({ center: [lon, lat] });
     };
 
     if (map.isStyleLoaded()) settle();
     else map.once('load', settle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // roundKey is a deliberate extra trigger: it forces a re-frame even when a
+    // round repeats the previous round's coordinates.
   }, [lat, lon, roundKey]);
 
   return <div ref={containerRef} className="h-full w-full" />;
