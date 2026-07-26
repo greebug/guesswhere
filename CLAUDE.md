@@ -415,6 +415,13 @@ Verified in the running app: the transform is installed, `/v4/mapbox.satellite/1
 1771.webp` → `...1771@2x.webp`, style URLs untouched, and that `@2x` URL really does
 return 512x512 (fetched both, compared `naturalWidth`).
 
+**Jesse confirmed both fixes live on 2026-07-25** — the imagery reads as sharp again, and
+the 25mi framing looks right. That closes the one thing the sandbox could never check
+here (nothing in this section was ever *seen* rendered during development; the automation
+tab is `document.hidden` and the map area screenshots as solid black). It says nothing
+about the pending "night atlas" design review further down — that's a separate question
+about the chrome, not the map.
+
 **This does NOT break the billing invariant, and here is the proof rather than the
 assertion:** the rewritten URL still carries both `access_token` *and* `sku`. The `sku`
 is GL JS's map-load session token — we are rewriting a URL GL JS itself generated for
