@@ -331,9 +331,10 @@ Martinique, Mayotte, French Guiana) go untinted rather than tinting mainland Fra
 **Verified computationally, not visually** — the sandbox browser's `document.hidden`
 throttle stops MapLibre from ever parsing the style, so the style object is checked
 against maplibre's own style-spec validator (layer order, paint expressions) and the API
-behaviour by `verify-eliminated.mjs`, but nothing is ever seen rendered. Jesse has
-confirmed the original grey tint and the "City, Country" answer live; **the green/amber
-colors and the island bucket thresholds have not been looked at by anyone yet.**
+behaviour by `verify-eliminated.mjs`, but nothing is ever seen rendered. **Jesse has
+since confirmed all of it live (2026-07-25)** — the grey tint, the "City, Country"
+answer, and the green/amber outcome colors and island bucket thresholds that had gone
+unreviewed. Treat the current values as approved rather than provisional.
 
 ## Mobile: the gameplay screens (2026-07-25)
 
@@ -368,8 +369,9 @@ clean at 375px already. What was actually wrong, all measured in a real viewport
 
 Verified at 320/360/375/412/768/1024/1280/1600: zero overflowing elements, no
 minimap/answer-bar overlap, no answer-bar/logo overlap at any of them. 320px is
-deliberately allowed to wrap to a third header row. **Nobody has looked at it**
-— same sandbox limitation as everything else here.
+deliberately allowed to wrap to a third header row. **Jesse confirmed this live on
+2026-07-25** — it was measured but unseen when written; it has now been looked at and
+is good.
 
 **Gotcha for the next person measuring this:** an "elements wider than the viewport"
 sweep reports ~19 false positives once a round is settled. They're all the minimap's
@@ -460,32 +462,38 @@ it against the real map object (11.156 at lat 23.4 in a 1278x1219 container — 
 match) *before* any conclusion was drawn from it. Do that again rather than trusting a
 from-scratch mercator derivation.
 
-## OPEN RIGHT NOW — visual review pending (2026-07-25)
+## The night-atlas review: closed, approved (2026-07-25)
 
-The "night atlas" redesign shipped (`66801f6`) and **nobody has looked at it yet** —
-the sandbox can't screenshot, so it was built and verified entirely without being
-seen. Jesse reviews by pasting screenshots; expect a round of feedback. The things
-most likely to be wrong are the ones DOM inspection can't catch:
+The redesign (`66801f6`) shipped without anyone having seen it — the sandbox can't
+screenshot, so it was built and verified entirely from the DOM. **Jesse has now reviewed
+it live and signed it off**, along with the mobile layout and the island/eliminated-tint
+colors. His words: flag issues as they come up. So the visual system is the approved
+baseline now, not a proposal awaiting feedback — don't "fix" it speculatively.
 
-- whether Fraunces at hero size actually has the character it's meant to,
-- whether the flat opaque panels now read as *too* plain against satellite imagery,
-- whether the warm-ink-on-cold-ground pairing holds up at full size.
+**The Arial trap does NOT exist here, and this was actually measured rather than
+assumed.** On the sister game (BingBongBlitz) the "AI font" complaint turned out to be
+literal: browsers don't inherit `font-family` into `button`/`input`/`textarea`/`select`,
+so every form control silently rendered in Arial. Guesswhere was never checked for it
+until now. Swept with real Chrome (the in-app preview tab is useless for this — it
+reports `innerWidth === 0`) across `/`, `/play/[id]`, `/duel/new` and `/duel/join`:
+**48 form controls, zero on a non-brand font**, and zero text-bearing elements off
+Fraunces/Archivo/IBM Plex Mono.
 
-**What the equivalent review found on the sister game (BingBongBlitz), because the
-same mistakes are likely here:** the "AI font" complaint turned out to be literal —
-browsers don't inherit `font-family` into `button`/`input`/`textarea`/`select`, so
-every form control silently rendered in Arial. **Guesswhere has not been checked for
-this.** Worth running before the next visual pass:
+The one and only hit is `.mapboxgl-ctrl-attrib-button` in Helvetica Neue — Mapbox's own
+attribution widget. That is vendor chrome that has to stay visible under the ToS and is
+not ours to restyle. **If this sweep is re-run, expect that hit and don't "fix" it.**
 
 ```js
-// in the preview tab, list any text element not using a brand font
-[...document.querySelectorAll('body *')]
-  .filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()))
-  .filter(e => !/Fraunces|Archivo|IBM Plex Mono/.test(getComputedStyle(e).fontFamily))
+// paste in a real browser tab; empty result = clean
+const brand = /Fraunces|Archivo|IBM Plex Mono/;
+[...document.querySelectorAll('button,input,textarea,select')]
+  .filter(e => !brand.test(getComputedStyle(e).fontFamily))
+  .map(e => [e.tagName, e.className, getComputedStyle(e).fontFamily]);
 ```
 
-Guesswhere styles most controls through `gw-btn` / `gw-input` / `gw-cta`, which set
-their own font — but any bare `<button>` or `<input>` would be in Arial right now.
+Why it's clean: controls go through `gw-btn` / `gw-input` / `gw-cta`, which set their own
+font. A bare `<button>` or `<input>` added later would silently be Arial, so this sweep is
+worth repeating after any batch of new UI.
 
 ## OPEN RIGHT NOW — read this first (as of 2026-07-23)
 
