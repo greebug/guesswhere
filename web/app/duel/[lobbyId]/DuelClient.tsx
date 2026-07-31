@@ -66,6 +66,9 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const [notFound, setNotFound] = useState(false);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  // Answer box focused -- holds the minimap open while typing. Same reason as
+  // solo: the name is read off the panel and transcribed into the field.
+  const [typing, setTyping] = useState(false);
 
   const [displayedRoundSeq, setDisplayedRoundSeq] = useState<number | null>(null);
   const [displayedRound, setDisplayedRound] = useState<CurrentRound | null>(null);
@@ -287,6 +290,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
               lon={displayedRound.lon}
               roundKey={displayedRound.index}
               showAnswer={settled}
+              keepOpen={typing}
             />
           </>
         )}
@@ -314,6 +318,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
               onNext={() => {}}
               canPrev={false}
               canNext={false}
+              onFocusChange={setTyping}
             />
           </div>
         )}

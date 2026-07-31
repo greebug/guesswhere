@@ -734,6 +734,85 @@ was driven through the real DOM (click → 200 → correct new game) and measure
 but the sandbox still can't screenshot. Blitz's rebuilt sign-in modal has not been looked
 at in a browser at all.
 
+## Timing: the clock can be paused, and that is now recorded (2026-07-30)
+
+Jesse worked out that the timer can be stopped deliberately and asked for ideas that
+wouldn't invalidate existing records. His reading was right, with one correction and one
+addition:
+
+- **Correction:** parked on a solved round, the main map shows *that* round's imagery, so
+  you can't study a later round's satellite view for free. What you *can* do for free is
+  everything else — **scanning the minimap**, looking things up, asking someone — which is
+  most of the work. He confirmed that's what he meant.
+- **Addition he hadn't spotted:** `MAX_ACCRUAL_STEP_MS` (30s) caps a single accrual step,
+  so **closing the tab for an hour costs 30 seconds**, and this needs no solved round —
+  it works on round 1. Backgrounding is a half-rate version. That cap exists so a closed
+  tab can't charge a round for hours; under-charging a deliberate pause is its other edge.
+- The selection/accrual model is otherwise exactly as documented: one round accrues at a
+  time, only while on screen AND unsettled, so the ten sum to the total.
+
+**What shipped: record it, don't rank it.** `total_ms` is still the only thing the
+leaderboard orders by, and **no existing record moved**.
+
+- `session.pausedMs` — one addition in `accrue()`, banking `gap - step`. That single
+  expression captures *both* leak paths (parked-on-settled, and over-cap gaps), and makes
+  `active + paused` equal true wall clock. Optional on the interface because sessions
+  persist as a JSON blob and in-flight games have no such field.
+- `game_results.started_at` / `.paused_ms` — **nullable, no default, migrated by
+  `ALTER TABLE`**. NULL means "not recorded" and renders as an em dash; coercing to 0
+  would claim old runs had zero pause, which is a different and false statement. Carried
+  on the snapshot rather than read from `games`, which is pruned at 30 days.
+- Result page shows **Active (ranked) / Elapsed / Paused**. Header's readout relabels
+  itself **"Paused"** on a settled round — the number was already frozen there (client
+  and server use the same condition), so this only names what was already happening.
+  Silence was the actual hazard: it read as a bug, or as a quiet edge for whoever noticed.
+- **Deliberately NOT done: ranking on wall clock.** It punishes an honest bathroom break
+  exactly as hard as an exploit, and would retroactively devalue every existing record.
+  The option held in reserve is a **per-game pause budget** (a generous allowance, then
+  the clock resumes) — it leaves honest runs untouched, so old and new stay comparable.
+  Revisit once there's real `paused_ms` data.
+- `web/scripts/verify-timing.mjs` (32 checks) pins all of it, including the negative:
+  the served board still matches a plain `ORDER BY total_ms`, id for id.
+
+**Backfilling old records:** Jesse has real elapsed times for some historical runs and
+will supply them. `scripts/README.md` has the `UPDATE`. Leave `paused_ms` NULL unless
+genuinely known — it is *not* `elapsed - total_ms`, since that difference also contains
+ordinary between-round time nobody measured.
+
+## Minimap: hillshade goes under the labels (2026-07-30)
+
+Jesse reported elevation shading obscuring town names, "especially the small ones," and
+suggested softening the relief under text. **It was layer order, not styling**: the
+hillshade layer was appended last, so it painted over all eleven of the tileset's symbol
+layers. A raster can't know where type is, and no halo tuning beats a layer drawn
+afterwards — so terrain now sits under the labels, anchored to the first `type: 'symbol'`
+layer rather than a hardcoded id (survives upstream reordering; `insertBefore` falls back
+to appending, i.e. the old behaviour, if no symbol layer exists).
+
+`web/scripts/verify-minimap-style.mjs` (18 checks) holds it, and runs the style through
+maplibre's own style-spec validator. It needs `--import ./scripts/alias-hook.mjs`: Node
+strips TypeScript types by itself but resolves specifiers with no knowledge of tsconfig's
+`@/*` paths.
+
+Also: the Map/Elevation/Pin buttons went from ~19px to **28px tall**, matching the round
+track's pips. Growth is mostly *vertical* on purpose — all three share the **collapsed**
+panel, which is only **208px wide** on a phone; measured 14px clearance at 320/375px.
+Pin was resized to match rather than left small, or it reads as a different class of
+control on the same strip.
+
+## The minimap stays open while typing (2026-07-30)
+
+Reading a name off the minimap and typing it into the answer box used to mean: click the
+field, move the cursor onto the panel to make it appear, read, move back. `AnswerBox` now
+reports focus and `MiniMap`'s `keepOpen` holds the panel open — solo and duels.
+`keepOpen` is deliberately separate from `pinned`: Pin is the player's own sticky choice
+and losing focus must not silently switch it off.
+
+**Sandbox gotcha, same family as the others:** `input.focus()` here sets `activeElement`
+but fires **no focus event**, because the tab itself isn't focused
+(`document.hasFocus() === false`). It looks exactly like a dead handler. Dispatch
+`focusin`/`focusout` directly — that's what React's `onFocus`/`onBlur` actually listen for.
+
 ## The one thing to never break
 
 The answer key is **extracted from the minimap tiles themselves**. Both the rendered label and

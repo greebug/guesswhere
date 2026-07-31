@@ -16,6 +16,10 @@ interface ResultView {
   totalMs: number;
   eligible: boolean;
   finishedAt: number;
+  /** Both null for results recorded before these were captured -- rendered as
+   * "not recorded" rather than as a zero. */
+  startedAt: number | null;
+  pausedMs: number | null;
   rounds: (BreakdownRound & { lat: number; lon: number })[];
 }
 
@@ -102,6 +106,21 @@ export default function ResultClient({ resultId }: { resultId: string }) {
         </p>
       </div>
 
+      {/* The big number above is ACTIVE time -- the sum of the ten rounds,
+          which only run while a round is both on screen and unsolved. That is
+          what the leaderboard ranks and it is not changing. This strip is the
+          context it was missing: how long the run took on the wall clock, and
+          how much of that gap was the clock stopped. A game can be paused
+          indefinitely by sitting on an already-solved round, so without this
+          there was no way to tell a quick run from a long one taken in stages.
+          Recorded and shown, never ranked. */}
+      <ElapsedStrip
+        totalMs={result.totalMs}
+        startedAt={result.startedAt}
+        finishedAt={result.finishedAt}
+        pausedMs={result.pausedMs}
+      />
+
       <div className="w-full max-w-xl">
         <ResultMap dots={result.rounds.map((r) => ({ name: r.name, lat: r.lat, lon: r.lon }))} />
       </div>
@@ -112,6 +131,54 @@ export default function ResultClient({ resultId }: { resultId: string }) {
         </h2>
         <RoundBreakdown rounds={result.rounds} />
       </div>
+    </div>
+  );
+}
+
+/** Active time vs. wall clock, side by side.
+ *
+ * `startedAt` is null for every result recorded before it was captured. Those
+ * say "not recorded" rather than showing a computed zero -- an unknown and a
+ * genuine zero are different claims, and the second one would be a lie about
+ * runs that were set under a rule that never measured this. */
+function ElapsedStrip({
+  totalMs,
+  startedAt,
+  finishedAt,
+  pausedMs,
+}: {
+  totalMs: number;
+  startedAt: number | null;
+  finishedAt: number;
+  pausedMs: number | null;
+}) {
+  const wallMs = startedAt === null ? null : Math.max(0, finishedAt - startedAt);
+  return (
+    <div className="w-full max-w-xl">
+      <div className="gw-rule mb-3" />
+      <dl className="flex items-baseline justify-center gap-6 text-center sm:gap-10">
+        <Stat label="Active" value={formatDuration(totalMs)} note="ranked" />
+        <Stat
+          label="Elapsed"
+          value={wallMs === null ? '—' : formatDuration(wallMs)}
+          note={wallMs === null ? 'not recorded' : 'start to finish'}
+        />
+        <Stat
+          label="Paused"
+          value={pausedMs === null ? '—' : formatDuration(pausedMs)}
+          note={pausedMs === null ? 'not recorded' : 'clock stopped'}
+        />
+      </dl>
+    </div>
+  );
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div>
+      <dt className="gw-eyebrow text-[10px] text-gw-mute">{label}</dt>
+      <dd className="gw-num mt-0.5 text-lg tabular-nums">{value}</dd>
+      <p className="mt-0.5 text-[10px] text-gw-faint">{note}</p>
     </div>
   );
 }

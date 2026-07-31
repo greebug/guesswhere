@@ -16,6 +16,9 @@ interface AnswerBoxProps {
   onNext: () => void;
   canPrev: boolean;
   canNext: boolean;
+  /** Fires on focus/blur of the text field. Optional so a caller that doesn't
+   * own a minimap (or doesn't care) can leave it off. */
+  onFocusChange?: (focused: boolean) => void;
 }
 
 export default function AnswerBox({
@@ -28,6 +31,7 @@ export default function AnswerBox({
   onNext,
   canPrev,
   canNext,
+  onFocusChange,
 }: AnswerBoxProps) {
   const [value, setValue] = useState('');
   const [shake, setShake] = useState(false);
@@ -100,6 +104,12 @@ export default function AnswerBox({
           type="text"
           value={settled ? (canonicalName ?? '') : value}
           onChange={(e) => setValue(e.target.value)}
+          // Typing a guess means reading the name off the minimap and
+          // transcribing it, so focus holds the panel open -- see MiniMap's
+          // `keepOpen`. Without it the loop was: click the field, move the
+          // cursor onto the panel to make it appear, read, move back.
+          onFocus={() => onFocusChange?.(true)}
+          onBlur={() => onFocusChange?.(false)}
           readOnly={settled}
           placeholder="Where is this?"
           autoComplete="off"

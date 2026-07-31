@@ -84,6 +84,21 @@ function getDb(): DatabaseSync {
     db.exec('CREATE INDEX IF NOT EXISTS lobbies_join_code ON lobbies (join_code)');
   }
 
+  // started_at and paused_ms likewise postdate game_results. Both are
+  // deliberately NULLable with no default: every row written before this
+  // existed has no honest value to give, and inventing one (0, or finished_at)
+  // would read as "this game had zero pause" rather than "we don't know". The
+  // UI renders NULL as an em dash. Ranking does not read either column --
+  // total_ms is still the only thing the leaderboard orders by, so nothing
+  // already recorded changes position.
+  const resultCols = db.prepare('PRAGMA table_info(game_results)').all() as { name: string }[];
+  if (!resultCols.some((c) => c.name === 'started_at')) {
+    db.exec('ALTER TABLE game_results ADD COLUMN started_at INTEGER');
+  }
+  if (!resultCols.some((c) => c.name === 'paused_ms')) {
+    db.exec('ALTER TABLE game_results ADD COLUMN paused_ms INTEGER');
+  }
+
   pruneOnce(db);
   return db;
 }
@@ -269,14 +284,23 @@ export interface GameResultRow {
   eligible: number;
   rounds_json: string;
   finished_at: number;
+  /** When the session was created. NULL on every row written before this
+   * column existed -- see the migration comment in the schema. With
+   * finished_at this gives wall-clock duration, which total_ms is not: the
+   * clock only runs on an unsettled round that is currently on screen. */
+  started_at: number | null;
+  /** Wall-clock time that elapsed while NO round was accruing -- see accrue().
+   * NULL for rows predating the column. */
+  paused_ms: number | null;
 }
 
 export function insertGameResult(row: GameResultRow): void {
   getDb()
     .prepare(
       `INSERT OR REPLACE INTO game_results
-       (id, user_id, target_population, only_coast, total_ms, eligible, rounds_json, finished_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       (id, user_id, target_population, only_coast, total_ms, eligible, rounds_json,
+        finished_at, started_at, paused_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       row.id,
@@ -286,7 +310,9 @@ export function insertGameResult(row: GameResultRow): void {
       row.total_ms,
       row.eligible,
       row.rounds_json,
-      row.finished_at
+      row.finished_at,
+      row.started_at,
+      row.paused_ms
     );
 }
 

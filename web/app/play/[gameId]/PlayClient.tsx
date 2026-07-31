@@ -44,6 +44,9 @@ export default function PlayClient({ gameId }: { gameId: string }) {
   const [game, setGame] = useState<GameView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Answer box focused -- holds the minimap open while a guess is being typed,
+  // since the name is being read off the panel and transcribed into the field.
+  const [typing, setTyping] = useState(false);
   const [reportPending, setReportPending] = useState(false);
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [eliminated, setEliminated] = useState<EliminatedCountry[]>([]);
@@ -270,6 +273,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
           roundKey={round.index}
           showAnswer={round.revealed}
           eliminated={eliminated}
+          keepOpen={typing}
         />
 
         {/* bottom-10 on mobile, not bottom-6: full-width down there, the bar's
@@ -287,6 +291,7 @@ export default function PlayClient({ gameId }: { gameId: string }) {
             onNext={() => setCurrentIndex((i) => Math.min(game.rounds.length - 1, i + 1))}
             canPrev={currentIndex > 0}
             canNext={currentIndex < game.rounds.length - 1}
+            onFocusChange={setTyping}
           />
         </div>
       </div>

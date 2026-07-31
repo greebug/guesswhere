@@ -4,7 +4,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { GAME_DB } from './env.mjs';
 const db = new DatabaseSync(GAME_DB);
 
-const pattern = "username LIKE 'alice\\_%' ESCAPE '\\' OR username LIKE 't\\_%' ESCAPE '\\' OR username LIKE 'mailer\\_%' ESCAPE '\\'";
+// One clause per prefix a verification script signs up with. Add to this when
+// adding a script, or its accounts and their game_results rows linger in the
+// dev DB and turn up in the local leaderboard.
+const prefixes = ['alice', 't', 'mailer', 'timing'];
+const pattern = prefixes.map((p) => `username LIKE '${p}\\_%' ESCAPE '\\'`).join(' OR ');
 const users = db.prepare(`SELECT id, username FROM users WHERE ${pattern}`).all();
 console.log(`removing ${users.length} test account(s): ${users.map((u) => u.username).join(', ')}`);
 

@@ -68,6 +68,12 @@ interface MiniMapProps {
    * answer to any remaining one. Solo only -- duels draw rounds one at a time
    * with no country-uniqueness rule, so nothing is ever eliminated there. */
   eliminated?: EliminatedCountry[];
+  /** Holds the panel open regardless of hover, for as long as it's true.
+   * Driven by focus in the answer box: you read the city name here and type it
+   * there, so the panel has to survive the trip. Not the same as `pinned` --
+   * that's the player's own explicit, sticky choice, and this must not
+   * silently turn it off when focus leaves. */
+  keepOpen?: boolean;
 }
 
 export default function MiniMap({
@@ -76,6 +82,7 @@ export default function MiniMap({
   roundKey,
   showAnswer = false,
   eliminated = EMPTY_COUNTRIES,
+  keepOpen = false,
 }: MiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -83,7 +90,7 @@ export default function MiniMap({
   const [layer, setLayer] = useState<Layer>('map');
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const expanded = hovering || pinned;
+  const expanded = hovering || pinned || keepOpen;
   // A touch device never fires the hover that expands this panel, so the hint
   // telling you to hover was instructing a phone user to do something their
   // device cannot do. Pin is a click and works everywhere -- point at that
@@ -342,12 +349,18 @@ export default function MiniMap({
               {country.name}
             </div>
           ))}
-        <div className="absolute top-1 left-1 z-10 flex gap-1 text-xs">
+        {/* Bigger hit targets than the original px-2/py-0.5 text-xs, which
+            were ~19px tall -- fine for a mouse, mean for a thumb. The growth
+            is mostly vertical (min-h-7, matching the round-track pips' 28px)
+            because the horizontal budget is real: these two plus Pin have to
+            fit across the COLLAPSED panel, which is only 208px wide on a
+            phone. Measured at 320-1600px before settling on these numbers. */}
+        <div className="absolute top-1 left-1 z-10 flex gap-1 text-[13px]">
           {(['map', 'elevation'] as const).map((l) => (
             <button
               key={l}
               onClick={() => setLayer(l)}
-              className={`rounded px-2 py-0.5 ${
+              className={`inline-flex min-h-7 items-center rounded px-2.5 py-1 leading-none ${
                 layer === l ? 'bg-white text-black' : 'bg-black/50 text-white'
               }`}
             >
@@ -363,11 +376,16 @@ export default function MiniMap({
             "Pinned") rather than a bare icon plus a separate explanatory hint
             box -- the two together read as two different things to click,
             and the icon alone was easy to miss entirely. */}
-        <div className="absolute top-1 right-1 z-10 text-xs">
+        {/* Sized to match the layer toggles opposite it -- left at the old
+            dimensions it read as a different class of control sitting on the
+            same strip, and it's the same awkward thumb target besides. */}
+        <div className="absolute top-1 right-1 z-10 text-[13px]">
           <button
             onClick={() => setPinned((p) => !p)}
             title={pinned ? 'Unpin the minimap' : 'Pin the minimap open'}
-            className={`rounded px-2 py-0.5 ${pinned ? 'bg-white text-black' : 'bg-black/50 text-white'}`}
+            className={`inline-flex min-h-7 items-center rounded px-2.5 py-1 leading-none ${
+              pinned ? 'bg-white text-black' : 'bg-black/50 text-white'
+            }`}
           >
             📌 {pinned ? 'Pinned' : 'Pin'}
           </button>

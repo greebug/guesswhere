@@ -152,6 +152,11 @@ export interface GameSession {
    * model: time is only ever credited to the round sitting in these fields. */
   activeRoundIndex: number | null;
   activeSince: number | null;
+  /** Wall-clock time that passed while no round was accruing -- see accrue().
+   * Optional because sessions persist as a JSON blob: games already in flight
+   * when this shipped have no such field, and `?? 0` is the honest reading for
+   * them (nothing was measured, not "nothing happened"). Never used to rank. */
+  pausedMs?: number;
   usedReveal: boolean;
   usedReport: boolean;
   /** True for a "Share Cities" copy -- a set someone has already played, so
@@ -220,11 +225,27 @@ export function accrue(session: GameSession, now: number = Date.now()): void {
   const { activeRoundIndex, activeSince } = session;
   if (activeRoundIndex === null || activeSince === null) return;
 
+  const gap = Math.max(0, now - activeSince);
   const round = session.rounds[activeRoundIndex];
+  let step = 0;
   if (round && !round.solved && !round.revealed) {
-    const step = Math.min(Math.max(0, now - activeSince), MAX_ACCRUAL_STEP_MS);
+    step = Math.min(gap, MAX_ACCRUAL_STEP_MS);
     round.elapsedMs += step;
   }
+  // Whatever this interval did NOT charge to a round. Two things land here,
+  // and they're exactly the two ways the clock can be stopped on purpose:
+  //
+  //  1. The slide on screen is already settled, so nothing accrues at all.
+  //     Parking on a solved round freezes the timer while you go on working --
+  //     scanning the minimap, looking things up, asking someone.
+  //  2. The gap ran past MAX_ACCRUAL_STEP_MS. That cap exists so a closed or
+  //     backgrounded tab can't charge a round for hours, and its unavoidable
+  //     other edge is that an hour away costs 30 seconds.
+  //
+  // Recorded, not punished: nothing reads this for ranking. It's here so the
+  // difference between a run and its wall clock is attributable rather than
+  // guessed at, and so there's real data to decide on a pause budget later.
+  session.pausedMs = (session.pausedMs ?? 0) + (gap - step);
   session.activeSince = now;
 }
 
@@ -337,6 +358,10 @@ export function finalizeIfComplete(session: GameSession, grader: Grader): boolea
       eligible: isEligible(session) ? 1 : 0,
       rounds_json: JSON.stringify(buildResultRounds(session, grader)),
       finished_at: now,
+      // The snapshot has to carry these itself -- the games row it came from
+      // is pruned after 30 days, and game_results is deliberately standalone.
+      started_at: session.createdAt,
+      paused_ms: session.pausedMs ?? 0,
     });
   }
   return true;

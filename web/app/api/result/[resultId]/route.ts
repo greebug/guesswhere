@@ -26,6 +26,11 @@ export async function GET(
     totalMs: row.total_ms,
     eligible: row.eligible === 1,
     finishedAt: row.finished_at,
+    // Null on every result recorded before these were captured. Passed through
+    // as null rather than coerced, so the page can say "not recorded" instead
+    // of claiming a game ran with zero pause.
+    startedAt: row.started_at,
+    pausedMs: row.paused_ms,
     rounds: JSON.parse(row.rounds_json) as ResultRound[],
   });
 }

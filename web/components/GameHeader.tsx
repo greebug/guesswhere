@@ -95,11 +95,26 @@ function RoundTrack({
 
 /** A labelled readout. Small caps label over a mono value -- the pattern the
  * whole app uses for anything that changes while you watch it. */
-function Readout({ label, children }: { label: string; children: React.ReactNode }) {
+function Readout({
+  label,
+  children,
+  muted = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  muted?: boolean;
+}) {
   return (
     <div className="flex flex-col items-end gap-0.5 leading-none">
-      <span className="gw-eyebrow text-[9px] tracking-[0.12em]">{label}</span>
-      <span className="gw-num text-[15px] text-gw-ink">{children}</span>
+      <span className={`gw-eyebrow text-[9px] tracking-[0.12em] ${muted ? 'text-gw-ochre' : ''}`}>
+        {label}
+      </span>
+      {/* One color class only, never a default alongside a state one: two
+          same-layer utilities resolve by Tailwind's emit order, not by the
+          order they appear in the attribute. */}
+      <span className={`gw-num text-[15px] ${muted ? 'text-gw-faint' : 'text-gw-ink'}`}>
+        {children}
+      </span>
     </div>
   );
 }
@@ -122,6 +137,13 @@ export default function GameHeader({
   elapsedMs,
 }: GameHeaderProps) {
   const [copyState, setCopyState] = useState<'idle' | 'working' | 'copied'>('idle');
+
+  // Derived, not passed in: this is exactly accrue()'s own condition for
+  // crediting time (the round on screen must be unsettled), and the header
+  // already has both halves of it. A separate prop threaded down from the
+  // server would be a second source of truth for the same fact.
+  const current = rounds[currentSlide - 1];
+  const paused = !!current && (current.solved || current.revealed);
 
   // Gives a friend their OWN independent playthrough of the same 10 cities --
   // not a live-shared session (an earlier version just copied this page's own
@@ -204,7 +226,15 @@ export default function GameHeader({
           </Readout>
         </div>
 
-        <Readout label="Elapsed">{formatDuration(elapsedMs)}</Readout>
+        {/* The clock only runs on a round that is BOTH on screen and unsolved,
+            so paging back to a settled one stops it entirely. That was
+            invisible before -- the number simply froze, which reads as a bug
+            or, worse, as a quiet advantage for anyone who noticed. Saying so
+            outright makes it a normal part of the game (go ahead, take a
+            breather) instead of a trick. */}
+        <Readout label={paused ? 'Paused' : 'Elapsed'} muted={paused}>
+          {formatDuration(elapsedMs)}
+        </Readout>
 
         <button
           onClick={onRecenter}

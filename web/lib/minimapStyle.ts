@@ -296,23 +296,35 @@ export function buildMinimapStyle(
     )
   );
 
+  // Terrain shading goes UNDER every label, not on top of the stack.
+  //
+  // Appending it last meant it painted over all eleven of the tileset's symbol
+  // layers, so switching to Elevation put hillshade relief across the town
+  // names -- worst for the small ones, whose type is smallest and whose halo
+  // has the least to work with. Shading the ground it describes is the whole
+  // point; shading the labels is pure loss, and no amount of halo tuning wins
+  // against a raster drawn afterwards.
+  //
+  // Anchored to the first symbol layer rather than a hardcoded id: that's the
+  // exact fill/line-to-label seam, and it stays correct if the upstream theme
+  // renames or reorders anything below it. insertBefore falls back to
+  // appending if the id is missing, which is the old behaviour -- so a future
+  // label-less theme degrades to "shading on top" rather than throwing.
+  const firstLabelId = baseLayers.find((l) => l.type === 'symbol')?.id;
+  const layers = withHillshade
+    ? insertBefore(baseLayers, firstLabelId ?? '', {
+        id: 'hillshade',
+        type: 'hillshade' as const,
+        source: HILLSHADE_SOURCE_ID,
+        layout: { visibility: 'none' as const },
+        paint: { 'hillshade-exaggeration': 0.7 },
+      } as LayerSpecification)
+    : baseLayers;
+
   return {
     version: 8,
     glyphs: GLYPHS,
     sources,
-    layers: [
-      ...baseLayers,
-      ...(withHillshade
-        ? [
-            {
-              id: 'hillshade',
-              type: 'hillshade' as const,
-              source: HILLSHADE_SOURCE_ID,
-              layout: { visibility: 'none' as const },
-              paint: { 'hillshade-exaggeration': 0.7 },
-            },
-          ]
-        : []),
-    ],
+    layers,
   };
 }
