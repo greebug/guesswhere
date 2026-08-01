@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Imagery cost/quality: Sentinel-2 vs Mapbox</title>
+<style>
+  body { font: 13px/1.5 system-ui, sans-serif; margin: 16px; background: #14161a; color: #e6e8ec; }
+  h1 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: #9aa3b2; margin: 0 0 12px; max-width: 900px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  select, input, button { font: inherit; background: #22262e; color: #e6e8ec; border: 1px solid #3a4150; border-radius: 5px; padding: 5px 8px; }
+  input[type=text] { width: 320px; }
+  button { cursor: pointer; }
+  .panels { display: flex; gap: 14px; flex-wrap: wrap; }
+  .panel h2 { font-size: 12px; margin: 0 0 6px; font-weight: 500; color: #9aa3b2; }
+  .panel h2 b { color: #e6e8ec; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 256px 256px; grid-template-rows: 256px 256px;
+          width: 512px; height: 512px; background: #000; border: 1px solid #3a4150; }
+  .grid img { width: 256px; height: 256px; display: block; }
+  .scale { color: #9aa3b2; font-variant-numeric: tabular-nums; }
+  .verdict { margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .ok { color: #4fb9a5; } .warn { color: #d9a441; } .bad { color: #d96a4f; }
+  table { border-collapse: collapse; margin-top: 18px; }
+  th, td { border: 1px solid #3a4150; padding: 5px 10px; text-align: left; }
+  th { color: #9aa3b2; font-weight: 500; }
+  .note { color: #9aa3b2; margin-top: 14px; max-width: 900px; }
+  code { background: #22262e; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Sentinel-2 vs Mapbox Satellite &mdash; is free imagery good enough for this game?</h1>
+<p class="sub">
+  Both panels are 2&times;2 native 256px tiles at the same z/x/y, drawn 1:1 with no upscaling, so what
+  you see is each source's true resolution. Sentinel-2's colour bands are <b>10 m/px</b> and EOX serves
+  them to <b>z14</b>; past that it is upscaling, not resolving. Mapbox is sub-metre in most populated
+  places. The question this tool answers is not "which is sharper" (Mapbox, obviously) but
+  <b>"at the zooms this game actually uses, can you still tell the city?"</b>
+</p>
+
+<div class="bar">
+  <select id="loc"></select>
+  <label>zoom <select id="zoom"></select></label>
+  <label>Sentinel year <select id="year"></select></label>
+  <span class="scale" id="scale"></span>
+</div>
+<div class="bar">
+  <label>Mapbox token <input type="text" id="tok" placeholder="pk.eyJ1... (blank = Sentinel only)"></label>
+  <button id="go">Load</button>
+  <span class="scale" id="saved"></span>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <h2><b>Sentinel-2 cloudless</b> (EOX) &mdash; free, CC BY 4.0, no key</h2>
+    <div class="grid" id="s2"></div>
+    <div class="verdict" id="s2v"></div>
+  </div>
+  <div class="panel">
+    <h2><b>Mapbox Satellite</b> &mdash; billed</h2>
+    <div class="grid" id="mb"></div>
+    <div class="verdict">sub-metre where it matters; this is the baseline</div>
+  </div>
+</div>
+
+<table>
+  <tr><th>&nbsp;</th><th>Sentinel-2 (EOX s2cloudless)</th><th>Mapbox Satellite</th></tr>
+  <tr><td>Native resolution</td><td>10 m/px (RGB bands)</td><td>~0.3&ndash;0.5 m/px in populated areas</td></tr>
+  <tr><td>Useful zoom ceiling</td><td>z14 (upscaled above)</td><td>z18&ndash;19+</td></tr>
+  <tr><td>Licence</td><td>CC BY 4.0 &mdash; redistribution and caching allowed</td><td>ToS forbids caching or proxying tiles</td></tr>
+  <tr><td>Cost model</td><td>free; self-host from R2 for pennies</td><td>per map load, no hard spend cap</td></tr>
+  <tr><td>Cost at 200k loads/mo</td><td class="ok">~$0</td><td class="bad">~$650</td></tr>
+  <tr><td>Cloud cover</td><td>annual cloudless composite &mdash; no clouds, but no seasons either</td><td>curated, mostly cloud-free</td></tr>
+</table>
+
+<p class="note">
+  <b>Why the zoom ceiling is the whole argument.</b> The game frames a round 25 miles wide. On a
+  1900px-wide window that is about <b>21 m/px</b>, so at the opening view Sentinel-2 is already finer
+  than the screen shows &mdash; it would look identical. It stays honest for roughly two more zoom
+  levels and then goes to mush, and zooming in is exactly how you settle between two candidate cities.
+  So the realistic shape is a <b>hybrid</b>: Sentinel for the default framing (which is most of the
+  round), Mapbox only once someone zooms past its ceiling. Mapbox bills when the map object is
+  <em>created</em>, so a hybrid only saves money if the Mapbox map isn't constructed until it's needed.
+</p>
+<p class="note">
+  Mapbox tiles here come from the raw tile endpoint, which is the <em>expensive</em> billing path &mdash;
+  the same caveat as <code>imagery-compare.html</code>. Fine for a handful of comparisons, never for
+  production. Loading this page a few dozen times costs cents; leaving it open on a loop does not.
+</p>
+
+<script>
+// Cities across latitudes and morphologies -- the point is to check whether
+// city SHAPE survives at 10 m/px, so this mixes dense grids, sprawl, river
+// towns and coastal strips rather than famous landmarks.
+const PLACES = [
+  ["Paris, France (dense, radial)", 48.8566, 2.3522],
+  ["Phoenix, USA (grid sprawl)", 33.4484, -112.0740],
+  ["Cairo, Egypt (river, desert edge)", 30.0444, 31.2357],
+  ["Venice, Italy (water, unmistakable)", 45.4408, 12.3155],
+  ["Brasilia, Brazil (planned, distinctive)", -15.7939, -47.8828],
+  ["Reykjavik, Iceland (high latitude)", 64.1466, -21.9426],
+  ["Ulaanbaatar, Mongolia (valley strip)", 47.8864, 106.9057],
+  ["Kolkata, India (delta, very dense)", 22.5726, 88.3639],
+  ["Perth, Australia (coastal sprawl)", -31.9505, 115.8605],
+  ["Kinshasa, DR Congo", -4.4419, 15.2663],
+  ["Missoula, USA (small, valley)", 46.8721, -113.9940],
+  ["Bozeman, USA (small, grid)", 45.6770, -111.0429],
+  ["Mâcon, France (small, river)", 46.3060, 4.8320],
+  ["Kalamata, Greece (small, coastal)", 37.0389, 22.1142],
+];
+
+const YEARS = ['2020', '2019', '2018'];
+const TOKEN_KEY = 'guesswhere.mapboxToken';   // shared with box-overlay.html / city-overlay.html
+
+const locSel = document.getElementById('loc');
+const zoomSel = document.getElementById('zoom');
+const yearSel = document.getElementById('year');
+const tokInput = document.getElementById('tok');
+
+PLACES.forEach(([n], i) => {
+  const o = document.createElement('option');
+  o.value = i; o.textContent = n; locSel.appendChild(o);
+});
+// z11-z12 is where a round actually opens (the 25-mile framing); the rest is
+// there to show where Sentinel gives out.
+for (let z = 9; z <= 17; z++) {
+  const o = document.createElement('option');
+  o.value = z;
+  o.textContent = 'z' + z + (z === 11 || z === 12 ? '  ← game opens here' : '') + (z === 14 ? '  ← Sentinel ceiling' : '');
+  if (z === 12) o.selected = true;
+  zoomSel.appendChild(o);
+}
+YEARS.forEach((y) => {
+  const o = document.createElement('option');
+  o.value = y; o.textContent = y; yearSel.appendChild(o);
+});
+
+const stored = localStorage.getItem(TOKEN_KEY);
+if (stored) { tokInput.value = stored; document.getElementById('saved').textContent = '(token restored from this browser)'; }
+
+function tileXY(lat, lng, z) {
+  const n = 2 ** z;
+  const x = (lng + 180) / 360 * n;
+  const r = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+  return [Math.floor(x), Math.floor(y)];
+}
+
+function fill(el, urlFor, x, y) {
+  el.innerHTML = '';
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const img = new Image();
+      img.src = urlFor(x + dx, y + dy);
+      img.loading = 'eager';
+      el.appendChild(img);
+    }
+  }
+}
+
+function render() {
+  const [, lat, lng] = PLACES[+locSel.value];
+  const z = +zoomSel.value;
+  const year = yearSel.value;
+  const [x, y] = tileXY(lat, lng, z);
+  const tok = tokInput.value.trim();
+  if (tok) localStorage.setItem(TOKEN_KEY, tok);
+
+  const mpp = 156543.03 * Math.cos(lat * Math.PI / 180) / 2 ** z;
+  document.getElementById('scale').textContent =
+    `${mpp.toFixed(1)} m/px on screen · tile ${z}/${x}/${y}`;
+
+  // EOX WMTS is /{z}/{row}/{col} -- row is y, col is x. Getting these the
+  // wrong way round returns a valid-looking tile of somewhere else entirely.
+  fill(document.getElementById('s2'),
+    (tx, ty) => `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-${year}_3857/default/GoogleMapsCompatible/${z}/${ty}/${tx}.jpg`,
+    x, y);
+
+  const v = document.getElementById('s2v');
+  if (z <= 13) { v.className = 'verdict ok'; v.textContent = `native detail here (10 m/px source vs ${mpp.toFixed(1)} m/px shown)`; }
+  else if (z === 14) { v.className = 'verdict warn'; v.textContent = 'at its limit - this is as good as Sentinel gets'; }
+  else { v.className = 'verdict bad'; v.textContent = `upscaled ${(2 ** (z - 14))}x - no real detail beyond z14`; }
+
+  const mb = document.getElementById('mb');
+  if (!tok) { mb.innerHTML = '<div style="grid-column:1/3;grid-row:1/3;display:flex;align-items:center;justify-content:center;color:#9aa3b2">paste a Mapbox token to compare</div>'; return; }
+  fill(mb,
+    (tx, ty) => `https://api.mapbox.com/v4/mapbox.satellite/${z}/${tx}/${ty}@2x.jpg90?access_token=${encodeURIComponent(tok)}`,
+    x, y);
+}
+
+document.getElementById('go').addEventListener('click', render);
+locSel.addEventListener('change', render);
+zoomSel.addEventListener('change', render);
+yearSel.addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

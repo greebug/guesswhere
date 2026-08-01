@@ -74,6 +74,28 @@ function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS game_results_user ON game_results (user_id, finished_at);
     CREATE INDEX IF NOT EXISTS game_results_board
       ON game_results (target_population, only_coast, eligible, total_ms);
+
+    -- Mapbox bills per map load and offers no hard spend cap, so the only real
+    -- ceiling is one we impose. This is the meter behind it: one row per
+    -- metric per UTC month, incremented as loads happen.
+    CREATE TABLE IF NOT EXISTS usage_counters (
+      metric TEXT NOT NULL,
+      period TEXT NOT NULL,          -- 'YYYY-MM', UTC
+      count INTEGER NOT NULL,
+      PRIMARY KEY (metric, period)
+    );
+
+    -- One row per rate-limited action, so "how many games has this actor
+    -- started today" is a plain COUNT over a window rather than a cursor that
+    -- has to be reset on a schedule.
+    CREATE TABLE IF NOT EXISTS rate_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor TEXT NOT NULL,           -- 'u:<userId>' signed in, 'ip:<sha256 prefix>' otherwise
+      kind TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS rate_events_lookup
+      ON rate_events (actor, kind, created_at);
   `);
 
   // join_code postdates the original lobbies table -- CREATE TABLE IF NOT
@@ -101,6 +123,49 @@ function getDb(): DatabaseSync {
 
   pruneOnce(db);
   return db;
+}
+
+// ---------------------------------------------------------------------------
+// Usage metering and rate limiting
+// ---------------------------------------------------------------------------
+
+/** Adds to a metric's counter for the given period, creating the row if this
+ * is the month's first event. */
+export function bumpUsage(metric: string, period: string, by = 1): void {
+  getDb()
+    .prepare(
+      `INSERT INTO usage_counters (metric, period, count) VALUES (?, ?, ?)
+       ON CONFLICT(metric, period) DO UPDATE SET count = count + excluded.count`
+    )
+    .run(metric, period, by);
+}
+
+export function readUsage(metric: string, period: string): number {
+  const row = getDb()
+    .prepare('SELECT count FROM usage_counters WHERE metric = ? AND period = ?')
+    .get(metric, period) as { count: number } | undefined;
+  return row?.count ?? 0;
+}
+
+/** Every recorded period for a metric, newest first -- the history behind the
+ * admin readout. */
+export function readUsageHistory(metric: string, limit = 12): { period: string; count: number }[] {
+  return getDb()
+    .prepare('SELECT period, count FROM usage_counters WHERE metric = ? ORDER BY period DESC LIMIT ?')
+    .all(metric, limit) as { period: string; count: number }[];
+}
+
+export function recordRateEvent(actor: string, kind: string, now = Date.now()): void {
+  getDb()
+    .prepare('INSERT INTO rate_events (actor, kind, created_at) VALUES (?, ?, ?)')
+    .run(actor, kind, now);
+}
+
+export function countRateEvents(actor: string, kind: string, sinceMs: number): number {
+  const row = getDb()
+    .prepare('SELECT COUNT(*) AS n FROM rate_events WHERE actor = ? AND kind = ? AND created_at >= ?')
+    .get(actor, kind, sinceMs) as { n: number };
+  return row.n;
 }
 
 // ---------------------------------------------------------------------------
@@ -386,6 +451,9 @@ export function readUserStats(userId: string): UserStats {
 
 const LOBBY_TTL_MS = 24 * 60 * 60 * 1000; // duels are finished within minutes
 const GAME_TTL_MS = 30 * 24 * 60 * 60 * 1000; // also the "Share Cities" link lifetime
+// Comfortably past the longest rate-limit window, so a sweep can never delete
+// an event that is still inside one.
+const RATE_EVENT_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 // `games` and `lobbies` grew unbounded from day one, which is where the
 // volume's ~94MB went. Dropping a game row does NOT affect leaderboards,
@@ -399,6 +467,10 @@ function pruneOnce(database: DatabaseSync): void {
     database.prepare('DELETE FROM games WHERE created_at < ?').run(now - GAME_TTL_MS);
     database.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now);
     database.prepare('DELETE FROM email_tokens WHERE expires_at < ?').run(now);
+    // Rate-limit rows are only ever read over a rolling window; anything older
+    // than the longest window is dead weight. usage_counters is NOT pruned --
+    // it's one small row per month and the history is the point.
+    database.prepare('DELETE FROM rate_events WHERE created_at < ?').run(now - RATE_EVENT_TTL_MS);
     // Deleting rows only frees pages back to SQLite's own freelist -- the file
     // itself stays at its high-water mark until a VACUUM rewrites it, which is
     // the part that actually gives disk back to the volume.

@@ -265,7 +265,13 @@ export default function PlayClient({ gameId }: { gameId: string }) {
       />
 
       <div className="relative flex-1">
-        <MainMap ref={mainMapRef} lat={round.lat} lon={round.lon} roundKey={round.index} />
+        <MainMap
+          ref={mainMapRef}
+          lat={round.lat}
+          lon={round.lon}
+          roundKey={round.index}
+          usageId={gameId}
+        />
 
         <MiniMap
           lat={round.lat}

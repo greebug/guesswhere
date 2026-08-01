@@ -163,6 +163,11 @@ export interface GameSession {
    * never leaderboard-eligible. See the clone route for the reasoning. */
   isClone: boolean;
   finishedAt: number | null;
+  /** Mapbox map loads this session has reported -- see the map-load route.
+   * Optional because sessions persist as a JSON blob and games already in
+   * flight have no such field. Capped, so a forged client can't inflate the
+   * meter and trip the spend ceiling on purpose. */
+  mapLoads?: number;
 }
 
 /** Fresh, unsolved copy of another session's exact round set -- same cities,

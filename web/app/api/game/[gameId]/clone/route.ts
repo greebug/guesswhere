@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGame, saveGame, newGameId } from '@/lib/server/gameStore';
 import { cloneRoundStates } from '@/lib/server/gameLogic';
+import { gateNewGame } from '@/lib/server/gate';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
+  // A clone is a fresh playable game, so it costs a map load like any other.
+  const gate = await gateNewGame(request.headers);
+  if (gate.response) return gate.response;
+
   const { gameId } = await params;
   const source = getGame(gameId);
   if (!source) return NextResponse.json({ error: 'game not found' }, { status: 404 });
@@ -41,6 +46,7 @@ export async function POST(
     finishedAt: null,
   };
   saveGame(clone);
+  gate.commit();
 
   return NextResponse.json({ gameId: clone.id });
 }

@@ -19,6 +19,7 @@ node scripts/verify-eliminated.mjs   # 13 checks: country-on-answer, the elimina
 node scripts/verify-replay.mjs   # 27 checks: "Play this set" on a result page
 node scripts/verify-sso.mjs      # 24 checks: the domain-wide session cookie other games read
 node scripts/verify-timing.mjs   # 32 checks: pause accounting, and that ranking ignores it
+node scripts/verify-usage.mjs    # 21 checks: map-load meter, spend ceiling, daily rate limit
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 
@@ -90,6 +91,27 @@ Leave `paused_ms` NULL unless you genuinely know it — it is not `elapsed - tot
 for an old run, because that difference also contains ordinary between-round time that
 was never measured separately. A wrong number here is worse than an honest blank.
 Neither column affects ranking, so a backfill can never move a record.
+
+## The cost-control one
+
+`verify-usage.mjs` needs the **server** started with small limits, or the ceiling and the
+limit are unreachable in a test run:
+
+```bash
+GAMES_PER_DAY_LIMIT=5 npm --prefix web run dev
+GAMES_PER_DAY_LIMIT=5 node scripts/verify-usage.mjs
+```
+
+Both halves need the value: the server enforces it, the script asserts against it.
+
+It resets the meter and the rate events on the way out, but it *does* write to
+`usage_counters` while running — don't point it at the production DB.
+
+**Keep `GAMES_PER_DAY_LIMIT` comfortably high in `.env.local` otherwise.** The other
+scripts create a lot of games between them, and a low limit makes them fail with a 429
+that looks nothing like the thing they were testing. They currently pass under a limit of
+5 only because signed-in and guest games are charged to different actors — that is luck,
+not design, and it will break as the suites grow.
 
 ## The layer-order one
 

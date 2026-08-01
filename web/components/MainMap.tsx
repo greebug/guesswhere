@@ -4,6 +4,10 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { boxAroundCenter, lonDegreesForKm, distanceKm } from '@/lib/geo';
+// Not a bare fetch('/api/...') string: basePath rewrites <Link> and router
+// pushes but never a fetch argument, so an un-prefixed one 404s in production
+// while working locally against the origin.
+import { api } from '@/lib/basePath';
 
 // PLAN.md: main view is pure satellite imagery, no vector layers/labels/
 // overlays -- and billed as ONE GL JS map load per game (instantiate once,
@@ -125,9 +129,21 @@ interface MainMapProps {
   lon: number;
   /** Bump this (e.g. round index) to force a jump even if lat/lon repeat. */
   roundKey: number | string;
+  /** Game session id, or duel lobby id with `usageKind="duel"`. Used only to
+   * attribute this map load to a real session for the usage meter -- see
+   * /api/usage/map-load. Omitting it means the load goes uncounted, which is
+   * a silent hole in the spend ceiling, so callers should always pass it. */
+  usageId?: string;
+  usageKind?: 'game' | 'duel';
 }
 
-const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, lon, roundKey }, ref) {
+const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({
+  lat,
+  lon,
+  roundKey,
+  usageId,
+  usageKind = 'game',
+}, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const centerRef = useRef({ lat, lon });
@@ -188,6 +204,24 @@ const MainMap = forwardRef<MainMapHandle, MainMapProps>(function MainMap({ lat, 
     // documented behavior auto-clamps the current zoom if it's now below the
     // recomputed minimum, so this doesn't need to also force a zoom itself.
     map.on('resize', () => applyWideZoomFloor(map, centerRef.current.lat));
+
+    // Report the billable event itself. Mapbox charges per map load, so this
+    // fires exactly once per instance -- `load` is emitted a single time, and
+    // this effect creates a single map for the whole game.
+    //
+    // Fire-and-forget on purpose: metering must never delay or break the map.
+    // A dropped report under-counts, which is the safe direction to be wrong
+    // in (the budget is set below Mapbox's free tier precisely to absorb that
+    // drift). `keepalive` so it still goes out if the tab is closing.
+    map.once('load', () => {
+      if (!usageId) return;
+      fetch(api('/api/usage/map-load'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: usageId, kind: usageKind }),
+        keepalive: true,
+      }).catch(() => {});
+    });
 
     return () => {
       map.remove();

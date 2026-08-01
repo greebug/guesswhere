@@ -5,10 +5,17 @@ import { saveGame, newGameId } from '@/lib/server/gameStore';
 import { getReportedIds } from '@/lib/server/reportedCities';
 import { getCurrentUser } from '@/lib/server/auth';
 import { pruneIfDue } from '@/lib/server/gameDb';
+import { gateNewGame } from '@/lib/server/gate';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
+  // Before any work: this is where a new Mapbox map load gets committed to,
+  // so it's where the monthly spend ceiling and the per-player daily limit
+  // are enforced. See lib/server/gate.ts.
+  const gate = await gateNewGame(request.headers);
+  if (gate.response) return gate.response;
+
   const body = await request.json().catch(() => null);
   const targetPopulation = Number(body?.targetPopulation);
   if (!Number.isFinite(targetPopulation) || targetPopulation <= 0) {
@@ -47,6 +54,10 @@ export async function POST(request: NextRequest) {
     finishedAt: null,
   };
   saveGame(session);
+  // Only now does this count against the player's daily allowance -- a request
+  // that fell out on validation above never created a game and never will
+  // cost a map load.
+  gate.commit();
 
   // Cheap no-op unless a day has passed; keeps the volume from creeping back
   // up without needing a separate cron process.

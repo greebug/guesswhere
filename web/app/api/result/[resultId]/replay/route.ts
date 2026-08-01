@@ -4,6 +4,7 @@ import { getGrader } from '@/lib/server/grader';
 import type { CityRow } from '@/lib/server/grader';
 import { createRoundStates, type ResultRound } from '@/lib/server/gameLogic';
 import { saveGame, newGameId } from '@/lib/server/gameStore';
+import { gateNewGame } from '@/lib/server/gate';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ resultId: string }> }
 ) {
+  // A replay is a fresh playable game, so it costs a map load like any other.
+  const gate = await gateNewGame(request.headers);
+  if (gate.response) return gate.response;
+
   const { resultId } = await params;
   const row = readGameResult(resultId);
   if (!row) return NextResponse.json({ error: 'result not found' }, { status: 404 });
@@ -69,6 +74,7 @@ export async function POST(
     finishedAt: null,
   };
   saveGame(session);
+  gate.commit();
 
   return NextResponse.json({ gameId: session.id });
 }

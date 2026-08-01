@@ -284,7 +284,14 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
       <div className="relative flex-1">
         {displayedRound && (
           <>
-            <MainMap ref={mainMapRef} lat={displayedRound.lat} lon={displayedRound.lon} roundKey={displayedRound.index} />
+            <MainMap
+              ref={mainMapRef}
+              lat={displayedRound.lat}
+              lon={displayedRound.lon}
+              roundKey={displayedRound.index}
+              usageId={lobbyId}
+              usageKind="duel"
+            />
             <MiniMap
               lat={displayedRound.lat}
               lon={displayedRound.lon}

@@ -734,6 +734,63 @@ was driven through the real DOM (click → 200 → correct new game) and measure
 but the sandbox still can't screenshot. Blitz's rebuilt sign-in modal has not been looked
 at in a browser at all.
 
+## Mapbox cost controls: the bill is now bounded (2026-08-01)
+
+Jesse wants to release publicly and was right to worry: Mapbox bills per map load on a
+marginal scale — 50k free, then $5/1,000, $4, $3. **100k loads is $250; 1M is ~$3,050.**
+They offer usage alerts but **no hard spend cap**, so the only real ceiling is one we
+impose on the side that issues games.
+
+**The load model, measured not assumed:** exactly one `new mapboxgl.Map` exists in the
+codebase (`MainMap.tsx`), created in a `[]`-dependency effect and repositioned with
+`jumpTo` between rounds. **One load per play-screen mount, not per round** — a ten-round
+game is one load. So the 50k free tier is roughly 50,000 games/month.
+
+- **`lib/server/usage.ts`** — the meter (`usage_counters`, one row per metric per UTC
+  month), the budget, and the rate limiter. **`lib/server/gate.ts`** is the single place
+  that decides whether a new game may start; every route that mints a playable game calls
+  it (solo, duel, clone, replay). Missing one would leave a hole in the ceiling.
+- **`POST /api/usage/map-load`** is called from MainMap's `map.once('load')` — the exact
+  billable event. Counting game *creations* instead would be wrong in both directions: a
+  refresh is a second billed load on one game, and a game nobody opens costs nothing.
+- **`MAX_LOADS_PER_SESSION` (40) is load-bearing.** Without a per-session cap, anyone
+  could POST the reporting endpoint in a loop and trip the kill switch — turning a spend
+  control into a way to take the game offline. The endpoint always answers 200 so it
+  never reveals which ids exist.
+- **Default budget is 45,000, deliberately under the 50,000 free tier.** Our count and
+  Mapbox's will never agree exactly (a load that fails before the `load` event fires is
+  billed by them, missed by us); the slack absorbs that drift, and under-counting is the
+  safe direction.
+- **`USAGE_EXEMPT_USERS`** (comma-separated usernames) bypasses both checks, or the owner
+  gets locked out by his own switch exactly when he needs to look at it. `GET /api/usage`
+  is restricted to those users — the number tells an attacker how much further to push.
+- Over budget → **503** on new games (not 429; the service is declining to spend money,
+  not blaming the caller), and **in-flight games keep working**.
+- `verify-usage.mjs` (21 checks) proves the refusals actually happen, which is the whole
+  point — a counter nobody enforces is just a graph.
+
+**Still Jesse's to do, and the cheapest protection of all: URL-restrict the production
+token.** `NEXT_PUBLIC_MAPBOX_TOKEN` ships in the client bundle by necessity, so anyone can
+read it out of the JS. Also worth a **separate dev token** — `reactStrictMode` defaults to
+on, so every `next dev` page load mounts effects twice and costs **two** map loads against
+whatever token `.env.local` holds.
+
+**Sentinel-2 as a fallback source — investigated, not built.** `tools/sentinel-compare.html`
+puts EOX's free s2cloudless (CC BY 4.0, so cacheable, unlike Mapbox) beside Mapbox at
+matched z/x/y. Verified live: real 256px tiles at every zoom, but byte size falls off a
+cliff past **z14** (17.5K → 11.6K → 8.0K → 5.5K) — the signature of upscaling. z14 is
+~9.5 m/px, matching Sentinel's 10 m bands. The game opens at ~21 m/px, so Sentinel is
+*finer than the default framing shows* and only gives out once you zoom in to settle
+between candidates. **Note EOX WMTS is `/{z}/{row}/{col}`** — swapping row and col returns
+a plausible tile of somewhere else entirely (verified: Sahara becomes a blank 918-byte
+ocean tile).
+
+**Sandbox note:** `map.once('load')` never fires in the preview browser — `document.hidden`
+throttles rendering, no first paint, no `load` event (confirmed: style JSON fetched, zero
+satellite tiles, `map.loaded() === false`). The reporting path was proven instead by
+temporarily exposing the map and firing the event by hand: the POST went to
+`/guesswhere/api/usage/map-load` (correctly prefixed) and the meter incremented.
+
 ## The name is "Guesswhere v2" (2026-08-01)
 
 Homage, not a version number. Jesse built this after the original **GuessWhere**

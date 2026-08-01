@@ -54,6 +54,10 @@ export interface DuelLobby {
   roundSeq: number;
   winnerId: string | null;
   createdAt: number;
+  /** Mapbox map loads reported against this lobby -- same meter and same cap
+   * as a solo session's. Optional: lobbies persist as a JSON blob, so ones
+   * already in flight have no such field. */
+  mapLoads?: number;
 }
 
 export function newLobbyId(): string {

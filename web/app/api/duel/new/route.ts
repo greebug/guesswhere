@@ -3,6 +3,7 @@ import { getGrader } from '@/lib/server/grader';
 import { createLobby, buildPublicState, generateJoinCode, type DuelSettings } from '@/lib/server/duelLogic';
 import { saveLobby, getLobbyByJoinCode } from '@/lib/server/duelStore';
 import { getCurrentUser } from '@/lib/server/auth';
+import { gateNewGame } from '@/lib/server/gate';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +32,11 @@ function parseSettings(body: unknown): DuelSettings | { error: string } {
 }
 
 export async function POST(request: NextRequest) {
+  // A duel opens the same Mapbox map as a solo game and costs the same load,
+  // so it goes through the same ceiling. Exempting it would leave a hole in it.
+  const gate = await gateNewGame(request.headers);
+  if (gate.response) return gate.response;
+
   const body = await request.json().catch(() => null);
 
   // A signed-in host duels under their account name, and the client-supplied
@@ -56,6 +62,7 @@ export async function POST(request: NextRequest) {
 
   const lobby = createLobby(name, settings, joinCode, user?.id ?? null);
   saveLobby(lobby);
+  gate.commit();
 
   return NextResponse.json({
     lobbyId: lobby.id,
