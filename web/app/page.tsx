@@ -60,8 +60,25 @@ export default function Home() {
             is a single word at display size and did exactly that. */}
         <section className="gw-rise flex min-w-0 flex-col items-start">
           <GlobeMark size={64} />
-          <h1 className="gw-display mt-5 text-[3.25rem] leading-[0.95] sm:text-7xl">
+          {/* "v2" as an edition mark rather than part of the word: mono, small
+              caps-height, set on the baseline beside the display serif -- the
+              way a printed atlas numbers a revision. Making it a second element
+              also keeps the wrap behaviour the comment above describes, since
+              it can break away from "Guesswhere" instead of widening it. */}
+          <h1 className="gw-display mt-5 flex flex-wrap items-baseline gap-x-3 text-[3.25rem] leading-[0.95] sm:text-7xl">
             Guesswhere
+            {/* The digit is sized to match the x-height of the display serif's
+                final "e", so "2" and "e" read as the same height on the shared
+                baseline. Not a round number: IBM Plex Mono's digits are 0.72em
+                tall and Fraunces' x-height is 0.486em, so the digit needs
+                0.486/0.72 of the heading size. Measured off the real fonts with
+                canvas TextMetrics -- both values change if either family does.
+                The "v" stays small, so it reads as a version mark rather than
+                as part of the word. */}
+            <span className="gw-num text-gw-verdigris">
+              <span className="text-[0.42em] tracking-[0.04em]">v</span>
+              <span className="text-[0.673em]">2</span>
+            </span>
           </h1>
           <p className="gw-eyebrow mt-4">Ten cities · Imagery only</p>
           <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-gw-mute">
@@ -169,10 +186,26 @@ export default function Home() {
         <Leaderboard />
       </section>
 
-      <p className="mt-12 max-w-lg text-xs leading-relaxed text-gw-faint">
-        Every answer is read out of the same map data the minimap draws — if a city has no
-        label on the map, it is not in the game.
-      </p>
+      <div className="mt-12 max-w-lg space-y-2 text-xs leading-relaxed text-gw-faint">
+        <p>
+          Every answer is read out of the same map data the minimap draws — if a city has no
+          label on the map, it is not in the game.
+        </p>
+        {/* The homage the "v2" refers to. Credit, not comparison: the idea is
+            theirs, and naming it plainly is the point of the rename. */}
+        <p>
+          A second take on{' '}
+          <a
+            href="https://guesswhere.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gw-mute underline decoration-gw-faint underline-offset-2 hover:text-gw-ink"
+          >
+            the original GuessWhere
+          </a>
+          , which is where the idea came from.
+        </p>
+      </div>
     </main>
   );
 }

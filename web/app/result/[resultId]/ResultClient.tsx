@@ -62,7 +62,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 ">
         <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-vermilion">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          Back to Guesswhere
+          Back to Guesswhere v2
         </Link>
       </div>
     );
@@ -79,7 +79,7 @@ export default function ResultClient({ resultId }: { resultId: string }) {
     <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-8">
       <div className="flex w-full max-w-xl items-start justify-between gap-3">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          &larr; Guesswhere
+          &larr; Guesswhere v2
         </Link>
         <div className="flex flex-col items-end gap-1">
           <button

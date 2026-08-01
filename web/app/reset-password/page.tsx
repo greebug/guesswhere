@@ -52,7 +52,7 @@ function ResetInner() {
           href="/"
           className="mt-2 gw-cta px-6 py-2.5"
         >
-          Back to Guesswhere
+          Back to Guesswhere v2
         </Link>
       </div>
     );

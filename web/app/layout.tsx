@@ -30,8 +30,12 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
 });
 
+// "v2" is deliberate homage, not a version number: this is a rebuild of the
+// original GuessWhere (guesswhere.vercel.app), whose idea the whole game comes
+// from. The URL path stays /guesswhere -- it's load-bearing for the session
+// cookie, every emailed link, and the hub Worker's routing.
 export const metadata: Metadata = {
-  title: "Guesswhere",
+  title: "Guesswhere v2",
   description: "Guess the city from satellite imagery alone.",
 };
 

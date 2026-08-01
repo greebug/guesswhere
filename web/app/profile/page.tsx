@@ -56,7 +56,7 @@ export default function ProfilePage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 ">
         <div className="gw-panel px-8 py-6 text-center"><p className="gw-eyebrow text-gw-vermilion">Error</p><p className="mt-2 text-gw-ink">{error}</p></div>
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          Back to Guesswhere
+          Back to Guesswhere v2
         </Link>
       </div>
     );
@@ -75,7 +75,7 @@ export default function ProfilePage() {
     <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-8">
       <div className="w-full max-w-xl">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          &larr; Guesswhere
+          &larr; Guesswhere v2
         </Link>
       </div>
 

@@ -17,7 +17,7 @@ import { BASE_PATH } from '../basePath';
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 const FROM_ADDRESS = process.env.EMAIL_FROM ?? 'noreply@bingbongblitz.com';
-const FROM_NAME = 'Guesswhere';
+const FROM_NAME = 'Guesswhere v2';
 
 export const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 export const RESET_TTL_MS = 60 * 60 * 1000;
@@ -101,14 +101,14 @@ export async function sendVerificationEmail(userId: string, email: string): Prom
   const url = `${appUrl()}${BASE_PATH}/verify?token=${token}`;
   return send(
     email,
-    'Verify your Guesswhere email',
+    'Verify your Guesswhere v2 email',
     layout(
       'Verify your email',
-      'Confirming this address is what lets you reset your Guesswhere password later. The link expires in 24 hours.',
+      'Confirming this address is what lets you reset your Guesswhere v2 password later. The link expires in 24 hours.',
       'Verify email',
       url
     ),
-    `Verify your Guesswhere email address by opening this link (expires in 24 hours):\n\n${url}\n\nIf you didn't sign up for Guesswhere, you can ignore this message.`
+    `Verify your Guesswhere v2 email address by opening this link (expires in 24 hours):\n\n${url}\n\nIf you didn't sign up for Guesswhere v2, you can ignore this message.`
   );
 }
 
@@ -130,13 +130,13 @@ export async function sendPasswordResetEmail(userId: string, email: string): Pro
   const url = `${appUrl()}${BASE_PATH}/reset-password?token=${token}`;
   return send(
     email,
-    'Reset your Guesswhere password',
+    'Reset your Guesswhere v2 password',
     layout(
       'Reset your password',
       "Choose a new password using the link below. It expires in one hour, and using it signs you out everywhere else. If you didn't ask for this, nothing has changed and you can ignore this email.",
       'Reset password',
       url
     ),
-    `Reset your Guesswhere password using this link (expires in one hour):\n\n${url}\n\nIf you didn't request this, nothing has changed and you can ignore this message.`
+    `Reset your Guesswhere v2 password using this link (expires in one hour):\n\n${url}\n\nIf you didn't request this, nothing has changed and you can ignore this message.`
   );
 }

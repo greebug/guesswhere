@@ -734,6 +734,34 @@ was driven through the real DOM (click → 200 → correct new game) and measure
 but the sandbox still can't screenshot. Blitz's rebuilt sign-in modal has not been looked
 at in a browser at all.
 
+## The name is "Guesswhere v2" (2026-08-01)
+
+Homage, not a version number. Jesse built this after the original **GuessWhere**
+(guesswhere.vercel.app, note the capital W — ours is a lowercase w) whose idea the game
+comes from; several elements of that one were broken, which is why this exists. The home
+page credits it in the footer, and the wording is deliberately credit rather than
+comparison — Jesse's private framing was blunter, but published text about someone else's
+work shouldn't be.
+
+- **The URL path stays `/guesswhere`.** It's load-bearing for the `bbb_session` cookie
+  every game on the domain reads, every emailed verify/reset link, and the hub Worker's
+  routing. Renaming it buys nothing and breaks all three.
+- Renamed: tab title, hero, every back-link, and the account emails (`From` name and all
+  subjects). The hub's tile said **"GuessWhere"** — the *original's* spelling on Jesse's
+  own landing page — and is now "Guesswhere v2". That lives in `../bingbongblitz-hub`
+  and needs its own `wrangler deploy`.
+- **The hero's "2" is sized to the x-height of the display serif's final "e"**:
+  `0.673em`, from IBM Plex Mono's 0.72em digits over Fraunces' 0.486em x-height,
+  measured off the real fonts with canvas `TextMetrics`. Don't round it, and re-measure
+  if either family changes. The "v" stays small so it reads as a version mark.
+- At 320px the mark wraps under the word — "Guesswhere" alone is 288px there. Accepted,
+  not a bug; it was already true before the mark existed.
+
+**Method note that cost a wrong answer here:** canvas `measureText` silently falls back
+to Georgia/monospace if the webfonts haven't finished loading, and reports confident
+numbers that are simply wrong. `await document.fonts.ready` first, and check
+`document.fonts.check(...)` if a measurement looks off.
+
 ## Timing: the clock can be paused, and that is now recorded (2026-07-30)
 
 Jesse worked out that the timer can be stopped deliberately and asked for ideas that

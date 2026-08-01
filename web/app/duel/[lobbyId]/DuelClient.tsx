@@ -348,7 +348,7 @@ function JoinScreen({ onJoin }: { onJoin: (name: string) => Promise<void> }) {
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
       <div className="w-full max-w-sm">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          <span aria-hidden="true">←</span> Guesswhere
+          <span aria-hidden="true">←</span> Guesswhere v2
         </Link>
       </div>
 
@@ -419,7 +419,7 @@ function LobbyScreen({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
       <div className="w-full max-w-sm">
         <Link href="/" className="gw-btn px-3 py-1.5 text-sm">
-          <span aria-hidden="true">←</span> Guesswhere
+          <span aria-hidden="true">←</span> Guesswhere v2
         </Link>
       </div>
 
