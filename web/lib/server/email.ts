@@ -83,8 +83,17 @@ function layout(heading: string, body: string, buttonLabel: string, url: string)
 }
 
 /** Issues a fresh verification token and mails the link. Returns whether the
- * mail actually went out. */
-export async function sendVerificationEmail(userId: string, email: string): Promise<boolean> {
+ * mail actually went out.
+ *
+ * `reason` only changes the wording. A verification link sent because someone
+ * asked to reset a password arrives unprompted-looking otherwise -- they asked
+ * for a reset and got "verify your email", which reads like the wrong message
+ * and is easy to dismiss as noise. */
+export async function sendVerificationEmail(
+  userId: string,
+  email: string,
+  reason: 'signup' | 'reset' = 'signup'
+): Promise<boolean> {
   if (!isEmailConfigured()) return false;
 
   const token = newToken();
@@ -99,17 +108,22 @@ export async function sendVerificationEmail(userId: string, email: string): Prom
   });
 
   const url = `${appUrl()}${BASE_PATH}/verify?token=${token}`;
-  return send(
-    email,
-    'Verify your Guesswhere v2 email',
-    layout(
-      'Verify your email',
-      'Confirming this address is what lets you reset your Guesswhere v2 password later. The link expires in 24 hours.',
-      'Verify email',
-      url
-    ),
-    `Verify your Guesswhere v2 email address by opening this link (expires in 24 hours):\n\n${url}\n\nIf you didn't sign up for Guesswhere v2, you can ignore this message.`
-  );
+
+  const subject =
+    reason === 'reset'
+      ? 'Confirm your email to reset your Guesswhere v2 password'
+      : 'Verify your Guesswhere v2 email';
+  const heading = reason === 'reset' ? 'Confirm your email first' : 'Verify your email';
+  const body =
+    reason === 'reset'
+      ? "You asked to reset your Guesswhere v2 password, but this address was never confirmed, so we can't send a reset link to it yet. Confirm it below, then request the reset again. The link expires in 24 hours."
+      : 'Confirming this address is what lets you reset your Guesswhere v2 password later. The link expires in 24 hours.';
+  const text =
+    reason === 'reset'
+      ? `You asked to reset your Guesswhere v2 password, but this address was never confirmed. Open this link to confirm it (expires in 24 hours), then request the reset again:\n\n${url}\n\nIf you didn't request this, nothing has changed and you can ignore this message.`
+      : `Verify your Guesswhere v2 email address by opening this link (expires in 24 hours):\n\n${url}\n\nIf you didn't sign up for Guesswhere v2, you can ignore this message.`;
+
+  return send(email, subject, layout(heading, body, 'Confirm email', url), text);
 }
 
 export async function sendPasswordResetEmail(userId: string, email: string): Promise<boolean> {

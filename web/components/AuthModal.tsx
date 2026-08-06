@@ -25,6 +25,9 @@ export default function AuthModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Set once the account exists and there is something the user still has to
+  // act on. Replaces the form rather than sitting under it -- see `submit`.
+  const [afterSignup, setAfterSignup] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +57,24 @@ export default function AuthModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong');
+
+      // Signing up with an email mails a verification link, and confirming the
+      // address is the ONLY thing that makes password reset possible later.
+      // This used to close the modal the instant the account existed, so the
+      // link was never mentioned -- accounts sat unverified until the day the
+      // password was forgotten, which is exactly when it's too late to fix.
+      // Stay open and say so; the account is already created and signed in
+      // either way, so this costs nothing but a dismissal.
+      if (mode === 'signup' && email) {
+        onSignedIn();
+        setAfterSignup(
+          data.verificationSent
+            ? `You're signed in. We've emailed ${email} a link to confirm the address — open it to turn on password reset. Until then, a forgotten password can't be recovered.`
+            : `You're signed in, but we couldn't email ${email} just now. Resend the confirmation from your profile — until the address is confirmed, a forgotten password can't be recovered.`
+        );
+        return;
+      }
+
       onSignedIn();
       onClose();
     } catch (err) {
@@ -64,6 +85,8 @@ export default function AuthModal({
   }
 
   const title = mode === 'login' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Reset password';
+  // Separate from `title`, which doubles as the submit button's label.
+  const heading = afterSignup ? 'Account created' : title;
 
   return (
     <div
@@ -76,7 +99,7 @@ export default function AuthModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gw-ink">{title}</h2>
+          <h2 className="text-xl font-bold text-gw-ink">{heading}</h2>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -86,6 +109,19 @@ export default function AuthModal({
           </button>
         </div>
 
+        {afterSignup && (
+          <div className="flex flex-col gap-4">
+            <p className="rounded-lg border border-gw-verdigris/30 bg-gw-verdigris/10 px-3 py-2 text-sm leading-relaxed text-gw-verdigris">
+              {afterSignup}
+            </p>
+            <button onClick={onClose} className="gw-cta px-6 py-2.5">
+              Got it
+            </button>
+          </div>
+        )}
+
+        {!afterSignup && (
+        <>
         <form onSubmit={submit} className="flex flex-col gap-3">
           {mode !== 'forgot' && (
             <>
@@ -162,6 +198,8 @@ export default function AuthModal({
             </button>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );
