@@ -19,7 +19,7 @@ node scripts/verify-eliminated.mjs   # 13 checks: country-on-answer, the elimina
 node scripts/verify-replay.mjs   # 27 checks: "Play this set" on a result page
 node scripts/verify-sso.mjs      # 24 checks: the domain-wide session cookie other games read
 node scripts/verify-timing.mjs   # 32 checks: pause accounting, and that ranking ignores it
-node scripts/verify-usage.mjs    # 21 checks: map-load meter, spend ceiling, daily rate limit
+node scripts/verify-usage.mjs    # 30 checks: map-load meter, spend ceiling, rate limit, whitelist
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 
@@ -112,6 +112,18 @@ scripts create a lot of games between them, and a low limit makes them fail with
 that looks nothing like the thing they were testing. They currently pass under a limit of
 5 only because signed-in and guest games are charged to different actors — that is luck,
 not design, and it will break as the suites grow.
+
+Section 7 checks the whitelist from the *outside* only — that a stranger can neither read
+the roster nor grant themselves an exemption, and that a granted account really does
+bypass both the budget and the rate limit. The **admin** half needs the server started
+with `USAGE_EXEMPT_USERS` set, which a plain run can't arrange:
+
+```bash
+USAGE_EXEMPT_USERS=<your username> npm --prefix web run dev
+```
+
+Then `GET /api/usage/users` returns the roster and `POST` it with
+`{"username":"...","exempt":true}` to whitelist someone.
 
 ## The layer-order one
 

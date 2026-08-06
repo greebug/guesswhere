@@ -5,6 +5,7 @@ import {
   readUsageHistory,
   recordRateEvent,
   countRateEvents,
+  isAccountExempt,
 } from '@/lib/server/gameDb';
 
 /**
@@ -77,10 +78,19 @@ export function mapLoadHistory(limit = 12) {
   return readUsageHistory(MAP_LOAD_METRIC, limit);
 }
 
-/** Usernames that bypass both the budget and the rate limit, comma-separated
- * in USAGE_EXEMPT_USERS. Without this the owner gets locked out of his own
- * game by his own switch, which is exactly when he most needs to look at it. */
-function exemptUsers(): Set<string> {
+/**
+ * Two levels, deliberately not the same thing.
+ *
+ * USAGE_EXEMPT_USERS (env) is the ROOT: those accounts bypass the limits AND
+ * are the only ones who may grant the bypass to anyone else. It lives in the
+ * environment because that is the one place a person with database access but
+ * not deploy access cannot quietly add themselves to.
+ *
+ * users.usage_exempt (database) is the grantable version, so adding a friend
+ * doesn't need a redeploy. A granted account skips the limits and nothing more
+ * -- it cannot grant onward, so the whitelist can never grow on its own.
+ */
+function rootUsers(): Set<string> {
   return new Set(
     (process.env.USAGE_EXEMPT_USERS ?? '')
       .split(',')
@@ -89,9 +99,17 @@ function exemptUsers(): Set<string> {
   );
 }
 
+/** Root only: may view the roster and grant/revoke exemption. */
+export function isAdmin(username: string | null | undefined): boolean {
+  if (!username) return false;
+  return rootUsers().has(username.toLowerCase());
+}
+
+/** Root or granted: bypasses the budget and the daily limit. */
 export function isExempt(username: string | null | undefined): boolean {
   if (!username) return false;
-  return exemptUsers().has(username.toLowerCase());
+  if (rootUsers().has(username.toLowerCase())) return true;
+  return isAccountExempt(username);
 }
 
 export interface BudgetState {

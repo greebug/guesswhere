@@ -113,6 +113,15 @@ function getDb(): DatabaseSync {
   // UI renders NULL as an em dash. Ranking does not read either column --
   // total_ms is still the only thing the leaderboard orders by, so nothing
   // already recorded changes position.
+  // Exemption from the usage budget/rate limit, grantable at runtime. The env
+  // var USAGE_EXEMPT_USERS still works and is the ROOT authority -- only
+  // accounts named there may grant it to anyone else -- but this column means
+  // adding a friend no longer needs a redeploy to take effect.
+  const userCols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (!userCols.some((c) => c.name === 'usage_exempt')) {
+    db.exec('ALTER TABLE users ADD COLUMN usage_exempt INTEGER NOT NULL DEFAULT 0');
+  }
+
   const resultCols = db.prepare('PRAGMA table_info(game_results)').all() as { name: string }[];
   if (!resultCols.some((c) => c.name === 'started_at')) {
     db.exec('ALTER TABLE game_results ADD COLUMN started_at INTEGER');
@@ -153,6 +162,48 @@ export function readUsageHistory(metric: string, limit = 12): { period: string; 
   return getDb()
     .prepare('SELECT period, count FROM usage_counters WHERE metric = ? ORDER BY period DESC LIMIT ?')
     .all(metric, limit) as { period: string; count: number }[];
+}
+
+export interface AccountSummary {
+  username: string;
+  created_at: number;
+  /** Whether they've confirmed an address, NOT the address itself -- knowing
+   * who can reset a password is the useful part; the address is not needed to
+   * decide who to whitelist, so it is never read out of here. */
+  email_verified: number;
+  usage_exempt: number;
+  /** Finished, recorded games. A quick read on who actually plays. */
+  games: number;
+  last_played_at: number | null;
+}
+
+export function listAccounts(): AccountSummary[] {
+  return getDb()
+    .prepare(
+      `SELECT u.username, u.created_at, u.email_verified, u.usage_exempt,
+              COUNT(r.id) AS games, MAX(r.finished_at) AS last_played_at
+         FROM users u
+         LEFT JOIN game_results r ON r.user_id = u.id
+        GROUP BY u.id
+        ORDER BY u.created_at DESC`
+    )
+    .all() as unknown as AccountSummary[];
+}
+
+/** Returns false if no such account, so a typo'd username reports as a miss
+ * rather than silently doing nothing. */
+export function setAccountExempt(username: string, exempt: boolean): boolean {
+  const res = getDb()
+    .prepare('UPDATE users SET usage_exempt = ? WHERE username_lower = ?')
+    .run(exempt ? 1 : 0, username.toLowerCase());
+  return Number(res.changes) > 0;
+}
+
+export function isAccountExempt(username: string): boolean {
+  const row = getDb()
+    .prepare('SELECT usage_exempt FROM users WHERE username_lower = ?')
+    .get(username.toLowerCase()) as { usage_exempt: number } | undefined;
+  return row?.usage_exempt === 1;
 }
 
 export function recordRateEvent(actor: string, kind: string, now = Date.now()): void {

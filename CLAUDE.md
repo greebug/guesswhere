@@ -761,9 +761,22 @@ game is one load. So the 50k free tier is roughly 50,000 games/month.
   Mapbox's will never agree exactly (a load that fails before the `load` event fires is
   billed by them, missed by us); the slack absorbs that drift, and under-counting is the
   safe direction.
-- **`USAGE_EXEMPT_USERS`** (comma-separated usernames) bypasses both checks, or the owner
-  gets locked out by his own switch exactly when he needs to look at it. `GET /api/usage`
-  is restricted to those users — the number tells an attacker how much further to push.
+- **Two levels of privilege, deliberately not the same thing.**
+  **`USAGE_EXEMPT_USERS`** (env, comma-separated) is the **root**: those accounts bypass
+  the limits *and* are the only ones who may grant the bypass to anyone else. It lives in
+  the environment because that's the one place someone with database access but not deploy
+  access can't quietly add themselves to. **`users.usage_exempt`** (DB column, migrated by
+  `ALTER TABLE`, default 0) is the grantable version, so whitelisting a friend needs no
+  redeploy — and a granted account **cannot grant onward**, so the whitelist can never grow
+  on its own.
+- **`GET /api/usage/users`** lists every account (username, signup date, games played, last
+  played, exemption + its source); **`POST`** the same route toggles `usage_exempt`. Both
+  root-only, and **404 rather than 403** — no reason to confirm the endpoint exists to
+  someone who can't use it. Revoking a root account is refused with a message pointing at
+  the env var, since the DB flag can't override it. **Email addresses are never returned** —
+  only whether one is verified, which is what's actually relevant (who can self-serve a
+  reset). `GET /api/usage` is root-only for the same reason: the number tells an attacker
+  how much further to push the counter.
 - Over budget → **503** on new games (not 429; the service is declining to spend money,
   not blaming the caller), and **in-flight games keep working**.
 - `verify-usage.mjs` (21 checks) proves the refusals actually happen, which is the whole

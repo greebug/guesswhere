@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/server/auth';
-import { budgetState, isExempt, mapLoadHistory, currentPeriod } from '@/lib/server/usage';
+import { budgetState, isAdmin, mapLoadHistory, currentPeriod } from '@/lib/server/usage';
 
 export const runtime = 'nodejs';
 
@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
  */
 export async function GET() {
   const user = await getCurrentUser();
-  if (!isExempt(user?.username)) {
+  if (!isAdmin(user?.username)) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
 

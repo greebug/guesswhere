@@ -168,6 +168,90 @@ check(
   'it would tell an attacker exactly how far to push the counter'
 );
 
+// ===========================================================================
+console.log('\n=== 7. Whitelisting ===');
+{
+  // Everything here is checked WITHOUT an admin session, because the property
+  // that matters is that a non-admin can neither read the roster nor grant
+  // themselves an exemption. Exercising the happy path needs the server
+  // started with USAGE_EXEMPT_USERS set, which a plain test run can't do.
+  r = await client('/api/usage/users');
+  check('roster is not readable without admin', r.status === 404, `status ${r.status}`);
+
+  r = await client('/api/usage/users', {
+    method: 'POST',
+    body: JSON.stringify({ username: 'anyone', exempt: true }),
+  });
+  check('a stranger cannot grant an exemption', r.status === 404, `status ${r.status}`);
+
+  const d = db();
+  const cols = d.prepare('PRAGMA table_info(users)').all();
+  const col = cols.find((c) => c.name === 'usage_exempt');
+  check('users.usage_exempt column exists', !!col);
+  check('it defaults to 0 (nobody is exempt by accident)', col?.dflt_value === '0', String(col?.dflt_value));
+
+  d.close();
+
+  // The bypass has to actually work, or the whitelist is decoration. Sign up a
+  // fresh account, flip the flag directly (the endpoint is admin-only by
+  // design), push the meter far past any budget, and check that this account
+  // gets through while an anonymous one is refused at the same instant.
+  const whitelisted = makeClient();
+  const name = `timing_vip_${Date.now().toString(36)}`;
+  await whitelisted('/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ username: name, password: 'correct-horse' }),
+  });
+
+  setMeter(10_000_000);
+  clearRates();
+
+  r = await whitelisted('/api/game/new', {
+    method: 'POST',
+    body: JSON.stringify({ targetPopulation: 500000, onlyCoast: false }),
+  });
+  check('a NON-whitelisted account is refused over budget', r.status === 503, `status ${r.status}`);
+
+  const d2 = db();
+  const flipped = d2.prepare('UPDATE users SET usage_exempt = 1 WHERE username_lower = ?').run(name.toLowerCase());
+  d2.close();
+  check('the flag can be set', Number(flipped.changes) === 1);
+
+  r = await whitelisted('/api/game/new', {
+    method: 'POST',
+    body: JSON.stringify({ targetPopulation: 500000, onlyCoast: false }),
+  });
+  check('the SAME account now gets through, over budget', r.status === 200, `status ${r.status}`);
+
+  r = await client('/api/game/new', {
+    method: 'POST',
+    body: JSON.stringify({ targetPopulation: 500000, onlyCoast: false }),
+  });
+  check('everyone else is still refused', r.status === 503, `status ${r.status}`);
+
+  // And the exemption must cover the rate limit too, not just the budget.
+  setMeter(0);
+  let ok = 0;
+  for (let i = 0; i < Number(process.env.GAMES_PER_DAY_LIMIT ?? 40) + 2; i++) {
+    const res = await whitelisted('/api/game/new', {
+      method: 'POST',
+      body: JSON.stringify({ targetPopulation: 500000, onlyCoast: false }),
+    });
+    if (res.status === 200) ok++;
+    else break;
+  }
+  check(
+    'a whitelisted account is not rate limited either',
+    ok === Number(process.env.GAMES_PER_DAY_LIMIT ?? 40) + 2,
+    `${ok} games created past the limit`
+  );
+
+  const d3 = db();
+  d3.prepare('DELETE FROM game_results WHERE user_id IN (SELECT id FROM users WHERE username_lower = ?)').run(name.toLowerCase());
+  d3.prepare('DELETE FROM users WHERE username_lower = ?').run(name.toLowerCase());
+  d3.close();
+}
+
 clearRates();
 setMeter(0);
 console.log('\n(meter and rate events reset)');
