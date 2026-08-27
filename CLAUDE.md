@@ -734,6 +734,42 @@ was driven through the real DOM (click → 200 → correct new game) and measure
 but the sandbox still can't screenshot. Blitz's rebuilt sign-in modal has not been looked
 at in a browser at all.
 
+## Duel rematch: same lobby, unanimous consent (2026-08-01)
+
+The end screen has a **Rematch** button. Everyone still present has to press it, then the
+lobby resets and everyone lands back in it — **same lobby id, same join code, same host,
+same settings**. Nothing gets re-shared, which is the whole point.
+
+- **It returns to `'lobby'`, not straight to a countdown.** The host stays in charge of
+  starting and gets a chance to change the timer or population floor first, which is
+  usually what people want after a lopsided match.
+- **"Everyone" means everyone still polling, not everyone who ever joined.** Without that,
+  one closed tab would block the remaining players forever with no way out but a new
+  lobby. `Player.lastSeenAt` is stamped by the state poll (`?playerId=`), which every
+  client already runs every 750ms.
+- **The stamp is throttled to 3s** (`SEEN_RESOLUTION_MS`). Re-stamping every poll would
+  make the lobby row differ every time and defeat the state route's existing
+  "only save if something changed" check — a SQLite write per client per 750ms.
+- **A departed player is dropped on reset**, and **if the departed player was the host,
+  the longest-standing survivor inherits it** — otherwise `hostPlayerId` names nobody and
+  the lobby can never be started again.
+- **`matchCount` scales the map-load cap.** `MAX_LOADS_PER_SESSION` is per *match*, not
+  per lobby; a flat cap would silently stop counting a lobby that rematched five times,
+  which is the one direction the meter must not drift. The allowance only grows via
+  `/rematch`, which is itself gated.
+- **The usage gate runs only on the deciding vote.** A rematch costs a fresh map load per
+  player, so it must respect the ceiling; charging every vote would bill one player's
+  daily allowance several times for one rematch. Cost lands on whoever presses last —
+  arbitrary, and the cheapest option that leaves no hole.
+- **DuelClient clears `displayedRound` when status returns to `'lobby'`.** Without it the
+  reset falls through to the round-transition branch and holds the finished match's round
+  under the result overlay for two seconds on top of the lobby screen — same family as the
+  black-screen bug documented above.
+
+`web/scripts/verify-rematch.mjs` (33 checks) covers the negative cases specifically: one
+vote does not start it, a repeat vote is idempotent, a stranger can't vote, and a lobby
+that hasn't finished can't be rematched.
+
 ## Mapbox cost controls: the bill is now bounded (2026-08-01)
 
 Jesse wants to release publicly and was right to worry: Mapbox bills per map load on a

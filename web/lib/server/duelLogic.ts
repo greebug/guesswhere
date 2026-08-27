@@ -14,6 +14,12 @@ export interface Player {
    * from the account rather than a text box, so it can't be spoofed. Null for
    * guests, who still type whatever they like. */
   userId?: string | null;
+  /** Last time this player's client polled for state. Presence exists for one
+   * reason: a rematch needs everyone to agree, and without it a single closed
+   * tab would block the remaining players forever. Optional because lobbies
+   * persist as a JSON blob -- for one written before this shipped, joinedAt
+   * stands in (see presentPlayers). */
+  lastSeenAt?: number;
 }
 
 export interface DuelRound {
@@ -58,6 +64,15 @@ export interface DuelLobby {
    * as a solo session's. Optional: lobbies persist as a JSON blob, so ones
    * already in flight have no such field. */
   mapLoads?: number;
+  /** Player ids who've pressed Rematch on the current end screen. Cleared the
+   * moment a rematch starts, and whenever a match ends, so it can never carry
+   * a stale agreement into the next one. */
+  rematchBy?: string[];
+  /** How many matches this lobby has played, starting at 1. Only used to scale
+   * the map-load cap: one lobby that rematches five times legitimately costs
+   * five matches' worth of loads, and a flat per-lobby cap would silently stop
+   * counting them. */
+  matchCount?: number;
 }
 
 export function newLobbyId(): string {
@@ -93,6 +108,7 @@ export function createLobby(
     roundWins: 0,
     joinedAt: Date.now(),
     userId,
+    lastSeenAt: Date.now(),
   };
   return {
     id: newLobbyId(),
@@ -108,13 +124,53 @@ export function createLobby(
     roundSeq: 0,
     winnerId: null,
     createdAt: Date.now(),
+    rematchBy: [],
+    matchCount: 1,
   };
 }
 
 export function addPlayer(lobby: DuelLobby, name: string, userId: string | null = null): Player {
-  const player: Player = { id: newPlayerId(), name, roundWins: 0, joinedAt: Date.now(), userId };
+  const now = Date.now();
+  const player: Player = {
+    id: newPlayerId(),
+    name,
+    roundWins: 0,
+    joinedAt: now,
+    userId,
+    lastSeenAt: now,
+  };
   lobby.players.push(player);
   return player;
+}
+
+// A client polls every ~750ms, so this is roughly 25 missed polls -- long
+// enough to ride out a phone locking or a laptop sleeping for a moment, short
+// enough that someone who genuinely closed the tab stops blocking a rematch
+// while the others are still looking at the end screen.
+const PRESENCE_TIMEOUT_MS = 20_000;
+
+// Clients poll ~750ms, but the stamp only needs to be accurate to a few
+// seconds against a 20s timeout. Re-stamping on every poll would make the
+// lobby row differ every time and force a SQLite write per client per poll,
+// defeating the state route's existing "only save if something changed"
+// check. This trades presence granularity we don't need for ~4x fewer writes.
+const SEEN_RESOLUTION_MS = 3000;
+
+/** Stamped from the state poll, which every client runs continuously. */
+export function markSeen(lobby: DuelLobby, playerId: string, now = Date.now()): void {
+  const player = lobby.players.find((p) => p.id === playerId);
+  if (!player) return;
+  if (player.lastSeenAt !== undefined && now - player.lastSeenAt < SEEN_RESOLUTION_MS) return;
+  player.lastSeenAt = now;
+}
+
+/** Players whose clients are still polling. `joinedAt` is the fallback for a
+ * lobby written before lastSeenAt existed -- during the deploy window that
+ * makes a long-running player look absent for up to one poll, which is the
+ * harmless direction: it can only ever let a rematch start with fewer people,
+ * never block one. */
+export function presentPlayers(lobby: DuelLobby, now = Date.now()): Player[] {
+  return lobby.players.filter((p) => now - (p.lastSeenAt ?? p.joinedAt) < PRESENCE_TIMEOUT_MS);
 }
 
 /** Picks one more city, never repeating one already used in this lobby.
@@ -162,6 +218,10 @@ function advanceRound(lobby: DuelLobby, winnerPlayerId: string | null, grader: G
       lobby.status = 'finished';
       lobby.winnerId = winnerPlayerId;
       lobby.roundDeadlineAt = null;
+      // Belt and braces: a fresh end screen always starts with nobody having
+      // agreed to anything, so no stale vote can carry into this match's
+      // rematch tally.
+      lobby.rematchBy = [];
       lobby.roundSeq++;
       return;
     }
@@ -174,6 +234,84 @@ function advanceRound(lobby: DuelLobby, winnerPlayerId: string | null, grader: G
   lobby.currentRoundIndex++;
   lobby.roundSeq++;
   lobby.roundDeadlineAt = Date.now() + lobby.settings.timerSeconds * 1000;
+}
+
+/**
+ * Records one player's vote to run the match again, and starts the rematch
+ * once everyone still present has voted.
+ *
+ * Unanimity is deliberate (it's what was asked for) but it's measured against
+ * players who are still *polling*, not everyone who ever joined -- otherwise
+ * one person closing their tab would leave the rest permanently unable to
+ * rematch, with no way out short of making a new lobby and redistributing the
+ * code.
+ *
+ * A rematch reuses this same lobby rather than creating a new one: same id,
+ * same join code, same host, same settings, same people. That's the whole
+ * point -- nobody has to re-share anything.
+ */
+export function requestRematch(
+  lobby: DuelLobby,
+  playerId: string,
+  now = Date.now()
+): { ok: boolean; started: boolean; reason?: string } {
+  if (lobby.status !== 'finished') return { ok: false, started: false, reason: 'match is not over' };
+  if (!lobby.players.some((p) => p.id === playerId)) {
+    return { ok: false, started: false, reason: 'not a player in this lobby' };
+  }
+
+  const votes = new Set(lobby.rematchBy ?? []);
+  votes.add(playerId);
+  // The voter is present by definition -- they just made a request.
+  markSeen(lobby, playerId, now);
+
+  const present = presentPlayers(lobby, now);
+  // Someone who voted and then walked away still counts: they said yes, and
+  // dropping their vote would make the tally jitter as people's tabs sleep.
+  const everyonePresentAgreed = present.every((p) => votes.has(p.id));
+
+  lobby.rematchBy = [...votes];
+  if (!everyonePresentAgreed) return { ok: true, started: false };
+
+  resetForRematch(lobby, present, now);
+  return { ok: true, started: true };
+}
+
+/** Back to the pre-match lobby, keeping identity and dropping scores.
+ *
+ * Deliberately returns to 'lobby' rather than jumping straight into a
+ * countdown: the host stays in charge of starting, and gets the chance to
+ * change the timer or the population floor before going again -- which is
+ * usually exactly what people want after a lopsided match. */
+function resetForRematch(lobby: DuelLobby, present: Player[], now: number): void {
+  const stillHere = new Set(present.map((p) => p.id));
+  // Drop players who have gone. Keeping them would leave ghosts on the
+  // scoreboard and, worse, make the NEXT rematch impossible to agree on.
+  const remaining = lobby.players.filter((p) => stillHere.has(p.id));
+  lobby.players = remaining.length > 0 ? remaining : lobby.players;
+
+  for (const p of lobby.players) p.roundWins = 0;
+
+  // If the original host left, the longest-standing remaining player inherits
+  // it -- otherwise the lobby has a host id matching nobody and can never be
+  // started again.
+  if (!lobby.players.some((p) => p.id === lobby.hostPlayerId)) {
+    const inheritor = [...lobby.players].sort((a, b) => a.joinedAt - b.joinedAt)[0];
+    if (inheritor) lobby.hostPlayerId = inheritor.id;
+  }
+
+  lobby.status = 'lobby';
+  lobby.rounds = [];
+  lobby.currentRoundIndex = 0;
+  lobby.countdownEndsAt = null;
+  lobby.roundDeadlineAt = null;
+  lobby.winnerId = null;
+  lobby.rematchBy = [];
+  lobby.matchCount = (lobby.matchCount ?? 1) + 1;
+  // Bumped so a client mid-poll notices the transition the same way it
+  // notices a round change, rather than needing a separate signal.
+  lobby.roundSeq++;
+  void now;
 }
 
 /** Advances lobby state if a deadline has already passed -- run at the top
@@ -258,6 +396,16 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
     lastRound: lastRoundIndex >= 0 ? toLastRound(lastRoundIndex) : null,
     rounds,
     winnerId: lobby.winnerId,
+    // Only meaningful on the end screen. `needed` counts players still
+    // polling, not everyone who ever joined, so the tally a player reads
+    // ("2 of 3 ready") matches the condition the server actually applies.
+    rematch:
+      lobby.status === 'finished'
+        ? {
+            requestedBy: lobby.rematchBy ?? [],
+            needed: presentPlayers(lobby).map((p) => p.id),
+          }
+        : null,
   };
 }
 

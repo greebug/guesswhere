@@ -52,6 +52,8 @@ interface DuelState {
   lastRound: LastRound | null;
   rounds: DuelReportRound[] | null;
   winnerId: string | null;
+  /** Non-null only on the end screen. */
+  rematch: { requestedBy: string[]; needed: string[] } | null;
 }
 
 const ROUND_RESULT_PAUSE_MS = 2000;
@@ -69,6 +71,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   // Answer box focused -- holds the minimap open while typing. Same reason as
   // solo: the name is read off the panel and transcribed into the field.
   const [typing, setTyping] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
 
   const [displayedRoundSeq, setDisplayedRoundSeq] = useState<number | null>(null);
   const [displayedRound, setDisplayedRound] = useState<CurrentRound | null>(null);
@@ -78,6 +81,12 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const transitionStartRef = useRef<number | null>(null);
 
   const mainMapRef = useRef<MainMapHandle>(null);
+  // Mirrors playerId for the poll effect, which must not re-subscribe every
+  // time the id resolves.
+  const playerIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    playerIdRef.current = playerId;
+  }, [playerId]);
 
   useEffect(() => {
     const cached = localStorage.getItem(playerIdKey(lobbyId));
@@ -90,7 +99,14 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     let cancelled = false;
     async function poll() {
       try {
-        const res = await fetch(api(`/api/duel/${lobbyId}/state`));
+        // playerId doubles as the presence heartbeat the rematch vote counts
+        // against -- see the state route. Read from the ref rather than the
+        // effect's closure so it starts being sent as soon as it's known,
+        // without restarting the poll interval.
+        const pid = playerIdRef.current;
+        const res = await fetch(
+          api(`/api/duel/${lobbyId}/state${pid ? `?playerId=${encodeURIComponent(pid)}` : ''}`)
+        );
         if (cancelled) return;
         if (!res.ok) {
           if (res.status === 404) setNotFound(true);
@@ -134,6 +150,17 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   // polling resumes, the same way every other piece of duel state here does.
   useEffect(() => {
     if (!state) return;
+    // A rematch resets the lobby to 'lobby' with no current round. Drop the
+    // finished match's round outright rather than letting it fall through to
+    // the transition branch below, which would hold the old round under the
+    // result overlay for two seconds on top of the lobby screen.
+    if (state.status === 'lobby' && displayedRound !== null) {
+      setDisplayedRound(null);
+      setDisplayedRoundSeq(null);
+      setTransitionInfo(null);
+      transitionStartRef.current = null;
+      return;
+    }
     if (displayedRound === null) {
       if (state.currentRound) {
         setDisplayedRoundSeq(state.roundSeq);
@@ -200,6 +227,28 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     return { correct: !!data.correct, canonicalName: data.canonicalName ?? null };
   }
 
+  async function handleRematch() {
+    if (!playerId) return;
+    setRematchError(null);
+    try {
+      const res = await fetch(api(`/api/duel/${lobbyId}/rematch`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // The usage gate can refuse here (503 over budget, 429 over the daily
+        // limit), and its message is written for a player to read.
+        setRematchError(data?.error ?? 'could not start a rematch');
+        return;
+      }
+      setState(data.state);
+    } catch {
+      setRematchError('could not reach the server');
+    }
+  }
+
   async function handleReport() {
     if (!playerId) return;
     const res = await fetch(api(`/api/duel/${lobbyId}/report`), {
@@ -258,7 +307,17 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   // solo GameReport -- rather than layering a winner card on top of the
   // last round's map, which is what the old WinnerOverlay did.
   if (state.status === 'finished' && state.winnerId && state.rounds) {
-    return <DuelReport players={state.players} winnerId={state.winnerId} rounds={state.rounds} />;
+    return (
+      <DuelReport
+        players={state.players}
+        winnerId={state.winnerId}
+        rounds={state.rounds}
+        playerId={playerId}
+        rematch={state.rematch}
+        onRematch={handleRematch}
+        rematchError={rematchError}
+      />
+    );
   }
 
   const remainingSeconds = state.roundDeadlineAt ? Math.ceil((state.roundDeadlineAt - now) / 1000) : null;

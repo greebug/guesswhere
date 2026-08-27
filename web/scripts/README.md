@@ -20,6 +20,7 @@ node scripts/verify-replay.mjs   # 27 checks: "Play this set" on a result page
 node scripts/verify-sso.mjs      # 24 checks: the domain-wide session cookie other games read
 node scripts/verify-timing.mjs   # 32 checks: pause accounting, and that ranking ignores it
 node scripts/verify-usage.mjs    # 30 checks: map-load meter, spend ceiling, rate limit, whitelist
+node scripts/verify-rematch.mjs  # 33 checks: duel rematch unanimity, presence, host inheritance
 node scripts/cleanup-test-users.mjs   # removes the throwaway accounts the above create
 ```
 

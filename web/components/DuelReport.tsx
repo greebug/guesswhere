@@ -27,10 +27,24 @@ function hexToRgbTriplet(hex: string): string {
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
 }
 
+export interface RematchState {
+  /** Player ids who've pressed Rematch. */
+  requestedBy: string[];
+  /** Player ids the server is actually waiting on -- everyone still polling,
+   * not everyone who ever joined. */
+  needed: string[];
+}
+
 interface DuelReportProps {
   players: DuelReportPlayer[];
   winnerId: string;
   rounds: DuelReportRound[];
+  /** Omit to hide the rematch controls entirely (e.g. a spectator with no
+   * player identity). */
+  playerId?: string | null;
+  rematch?: RematchState | null;
+  onRematch?: () => void;
+  rematchError?: string | null;
 }
 
 /** Post-match duel screen, laid out to match the solo report / leaderboard
@@ -39,7 +53,15 @@ interface DuelReportProps {
  * won it (grey for a timeout nobody solved), so the map reads as a visual
  * scoreboard at a glance. Replaces the whole duel screen rather than
  * overlaying it, same as the solo GameReport. */
-export default function DuelReport({ players, winnerId, rounds }: DuelReportProps) {
+export default function DuelReport({
+  players,
+  winnerId,
+  rounds,
+  playerId = null,
+  rematch = null,
+  onRematch,
+  rematchError = null,
+}: DuelReportProps) {
   const winner = players.find((p) => p.id === winnerId);
   const winnerColor = colorForPlayer(players, winnerId);
 
@@ -83,6 +105,20 @@ export default function DuelReport({ players, winnerId, rounds }: DuelReportProp
         </div>
       </div>
 
+      {/* Rematch sits directly under the scoreboard, above the map: it's the
+          decision everyone is making right now, and burying it under a
+          round-by-round table would mean scrolling past the whole report to
+          find it. Same lobby, same code, same host -- nothing to re-share. */}
+      {rematch && onRematch && playerId && (
+        <RematchPanel
+          players={players}
+          playerId={playerId}
+          rematch={rematch}
+          onRematch={onRematch}
+          error={rematchError}
+        />
+      )}
+
       <div className="gw-rise w-full max-w-xl overflow-hidden rounded-md border border-gw-ink/10">
         <ResultMap
           dots={rounds.map((r) => ({
@@ -116,6 +152,67 @@ export default function DuelReport({ players, winnerId, rounds }: DuelReportProp
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/** Everyone still in the lobby has to press this before the match restarts.
+ *
+ * The tally counts only players the server is still hearing from, which is why
+ * it can read "1 of 2" when three people were in the match -- someone closed
+ * their tab. Showing the raw player list instead would leave the others
+ * waiting on a vote that can never arrive. */
+function RematchPanel({
+  players,
+  playerId,
+  rematch,
+  onRematch,
+  error,
+}: {
+  players: DuelReportPlayer[];
+  playerId: string;
+  rematch: RematchState;
+  onRematch: () => void;
+  error: string | null;
+}) {
+  const waitingOn = rematch.needed.filter((id) => !rematch.requestedBy.includes(id));
+  const iAgreed = rematch.requestedBy.includes(playerId);
+  const nameFor = (id: string) => players.find((p) => p.id === id)?.name ?? 'someone';
+
+  return (
+    <div className="w-full max-w-xl">
+      <div className="gw-rule mb-3" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="gw-eyebrow text-[10px] text-gw-mute">Play again</p>
+          <p className="mt-1 text-sm text-gw-mute">
+            {error ? (
+              <span className="text-gw-vermilion">{error}</span>
+            ) : waitingOn.length === 0 ? (
+              'Everyone’s in — starting…'
+            ) : iAgreed ? (
+              <>Waiting for {waitingOn.map(nameFor).join(', ')}</>
+            ) : (
+              'Same lobby, same code, scores back to zero.'
+            )}
+          </p>
+        </div>
+
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={onRematch}
+            disabled={iAgreed}
+            className={`gw-btn px-4 py-1.5 text-sm ${iAgreed ? '' : 'gw-tone-verdigris'}`}
+          >
+            {iAgreed ? '✓ Ready' : 'Rematch'}
+          </button>
+          <p className="gw-num text-[11px] text-gw-faint">
+            {rematch.requestedBy.filter((id) => rematch.needed.includes(id)).length} of{' '}
+            {rematch.needed.length} ready
+          </p>
+        </div>
       </div>
     </div>
   );

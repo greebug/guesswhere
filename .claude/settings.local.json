@@ -104,7 +104,9 @@
       "Bash(nslookup bingbongblitz.com)",
       "Bash(npx wrangler *)",
       "Bash(curl -s -D - -o /dev/null \"https://bingbongblitz.com\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://bingbongblitz.com/socket.io/?EIO=4&transport=polling\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://bingbongblitz.com/socket.io/?EIO=4&transport=polling\")",
+      "Bash(curl -sI \"https://bingbongblitz.com/trio/assets/index-uD6Wz0gw.js\")",
+      "Bash(curl -s -o /dev/null \"http://localhost:3000/guesswhere/api/duel/f137822d-4ab3-48bc-be16-86d8061b3ba4/state?playerId=6e8ecfc8-e0ab-4795-b072-830d3ce0451d\")"
     ]
   }
 }

@@ -29,7 +29,13 @@ export async function POST(request: NextRequest) {
   if (kind === 'duel') {
     const lobby = getLobby(id);
     if (!lobby) return NextResponse.json({ ok: true });
-    if ((lobby.mapLoads ?? 0) >= MAX_LOADS_PER_SESSION) return NextResponse.json({ ok: true });
+    // The cap scales with matches played. A lobby that rematches five times
+    // legitimately costs five matches' worth of loads, and a flat per-lobby
+    // cap would quietly stop counting them -- under-reporting real spend,
+    // which is the one direction the meter must not drift in on purpose.
+    // The allowance only grows via /rematch, which is itself gated.
+    const cap = MAX_LOADS_PER_SESSION * (lobby.matchCount ?? 1);
+    if ((lobby.mapLoads ?? 0) >= cap) return NextResponse.json({ ok: true });
     lobby.mapLoads = (lobby.mapLoads ?? 0) + 1;
     saveLobby(lobby);
   } else {
