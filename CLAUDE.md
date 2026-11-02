@@ -158,6 +158,68 @@ map instances to `window` temporarily); actual visual rendering needs a real bro
 decision is still current — a couple of things (population-band model, minimap
 starting view) were built one way, then explicitly corrected by the user afterward.
 
+## Duel lag: what it actually was, and what it wasn't (2026-11-01)
+
+Reported as three things — a countdown reading 15 for one player and 5 for another, a
+3-minute timer 15s apart between players, and submitted answers taking up to ~10s to
+show green or shake. The third was by far the most annoying. They had **two unrelated
+causes**, and two confident theories were wrong.
+
+**The two timer symptoms were one bug, and not lag at all.** `COUNTDOWN_MS` is 5000, so
+no code path can produce "15" — a client showing 15 was proving its own clock was 10s
+behind the server's. `buildPublicState` sent `countdownEndsAt`/`roundDeadlineAt` as
+absolute server timestamps and the client differenced them against its own `Date.now()`,
+so every display was off by exactly that machine's clock drift. It is per-client,
+constant, and independent of load or player count. The server was always right: rounds
+really did end simultaneously, only the numbers lied. Fixed by sending `serverNow` and
+having the client derive an NTP-style offset (half-RTT, keeping the *fastest* sample —
+a slow response skews the estimate badly, a fast one barely can).
+
+**Measured, from Railway's HTTP logs** (`railway logs --http --since 48h`, which carry
+per-request durations — the app itself logged nothing at all before this):
+`/state` p50 **5ms**, p90 69ms, p99 **3120ms**, max **4615ms**.
+
+**Ruled out, both of which looked obvious first:**
+- *Restarts/OOM.* One container start in 48h, no OOM, no crash, no error lines. The
+  grader build log added here exists so a future restart is visible at all — a second
+  `[grader] built` line means the process died.
+- *Multi-player congestion.* The window with the 4.6s stalls was **one** client polling
+  and no other traffic. The stalls happen at near-zero load. A read-only probe (a 404
+  `getLobby` miss, no write) also spiked: 2 of 50 samples over 1s. So it is not
+  contention and not specific to writes.
+
+**What's left, and what was done about it.** Every request does *synchronous* SQLite I/O
+against a network-attached volume on Node's single event loop, so storage latency
+becomes request latency for every player at once. The DB had been opened with **no
+pragmas**, i.e. rollback journal + `synchronous=FULL`: ~4 fsyncs to networked storage per
+lobby save. Now WAL + `synchronous=NORMAL` + `busy_timeout`. **This is a hypothesis
+test, not a proven fix** — re-measure p99 against the 3120ms baseline above after a real
+multi-player duel. If it hasn't moved, the answer is to take SQLite off the hot path
+entirely: hold lobbies in an in-process `Map` (single-instance is already assumed in
+`auth.ts`'s rate limiter) and persist write-behind.
+
+**Three real bugs found alongside it, any of which could look like "my answer didn't
+register":**
+- **`guess/route.ts` read the lobby ABOVE `await request.json()`**, putting an await
+  between the read and the write. Node runs one request at a time, so every other
+  handler is atomic between its read and its save — but an await yields, and a
+  concurrent poll could complete a full read-modify-write in that gap and be silently
+  overwritten (a timing-out round's advance, or another player's winning guess). The
+  read now happens after the body parse. **Keep it that way.**
+- **`handleGuess` never checked `res.ok`.** A 502 made `res.json()` reject with nothing
+  catching it, so a guess produced no flash, no shake and no message — it just vanished,
+  which is indistinguishable from the server being slow.
+- **The poll loop had no in-flight guard.** `setInterval(poll, 750)` fired regardless of
+  whether the previous request had returned, so a 3s stall queued 4–5 requests that then
+  landed out of order, and the last to land won — which could revert a round that had
+  just completed. There is now one poll in flight at a time plus a ticket per request,
+  and `applyState` drops any response older than the newest already applied.
+
+`AnswerBox` now shows "Checking" while a guess is in flight and "Didn't send — try
+again" when one fails, and refuses a duplicate submit. The answer never reaches the
+client until the round settles, so there is nothing to grade optimistically — the round
+trip is the only source of truth, and saying so is better than an unmarked box.
+
 ## Domain migration — Guesswhere lives under a base path now (2026-07-24)
 
 All four of Jesse's games moved under one domain: `bingbongblitz.com/blitz`,

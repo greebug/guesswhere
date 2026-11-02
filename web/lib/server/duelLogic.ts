@@ -377,6 +377,13 @@ export function buildPublicState(lobby: DuelLobby, grader: Grader) {
     joinCode: lobby.joinCode,
     hostPlayerId: lobby.hostPlayerId,
     status: lobby.status,
+    // Every deadline below is an absolute timestamp on the SERVER's clock.
+    // Sending the server's own current time alongside them is what lets a
+    // client measure the gap between its clock and ours and subtract it.
+    // Without this, each player's countdown is wrong by however far their own
+    // machine's clock has drifted -- which is why one player saw "15" on a
+    // countdown that is only ever five seconds long.
+    serverNow: Date.now(),
     players: lobby.players.map((p) => ({ id: p.id, name: p.name, roundWins: p.roundWins })),
     settings: lobby.settings,
     countdownEndsAt: lobby.countdownEndsAt,

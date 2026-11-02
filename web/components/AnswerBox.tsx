@@ -35,6 +35,13 @@ export default function AnswerBox({
 }: AnswerBoxProps) {
   const [value, setValue] = useState('');
   const [shake, setShake] = useState(false);
+  // In flight, and "the request failed outright". Both exist because the
+  // answer deliberately never reaches the client until the round settles, so
+  // there is nothing to grade optimistically -- the round trip is the only
+  // thing that can say whether a guess was right. When the server takes a
+  // few seconds, an unmarked box looks exactly like a box that ignored you.
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
   // One-shot acknowledgement on the transition into solved, not a standing
   // glow -- the celebration is the moment, the color is the state.
   const [flash, setFlash] = useState(false);
@@ -48,6 +55,8 @@ export default function AnswerBox({
     setValue('');
     setShake(false);
     setFlash(false);
+    setPending(false);
+    setFailed(false);
   }, [resetKey]);
 
   // Left/Right paginate between rounds -- but only when the answer box isn't
@@ -65,17 +74,34 @@ export default function AnswerBox({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (settled || !value.trim()) return;
-    const result = await onGuess(value);
-    if (result.correct) {
-      playCorrect();
-      setFlash(true);
-      setTimeout(() => setFlash(false), 700);
-    } else {
-      playIncorrect();
-      setValue('');
+    // `pending` in the guard is the other half of the fix: without it, a
+    // second Enter while the first guess was still in flight fired a
+    // duplicate -- which is exactly what a player does when the box appears
+    // to have ignored them.
+    if (settled || pending || !value.trim()) return;
+    setPending(true);
+    setFailed(false);
+    try {
+      const result = await onGuess(value);
+      if (result.correct) {
+        playCorrect();
+        setFlash(true);
+        setTimeout(() => setFlash(false), 700);
+      } else {
+        playIncorrect();
+        setValue('');
+        setShake(true);
+        setTimeout(() => setShake(false), 400);
+      }
+    } catch {
+      // The guess never reached the server, or came back as an error page.
+      // Keep what they typed: making someone retype "Antananarivo, Madagascar"
+      // because the network blipped is the worst possible response.
+      setFailed(true);
       setShake(true);
       setTimeout(() => setShake(false), 400);
+    } finally {
+      setPending(false);
     }
   }
 
@@ -99,11 +125,25 @@ export default function AnswerBox({
             {tone.label}
           </span>
         )}
+        {/* Only reachable while unsettled, so it never competes with
+            tone.label above (which is null in exactly that case). */}
+        {!settled && (pending || failed) && (
+          <span
+            className={`gw-eyebrow absolute -top-2 left-3 z-10 bg-gw-ground px-1.5 text-[10px] ${
+              failed ? 'text-gw-vermilion' : 'gw-breathe text-gw-verdigris'
+            }`}
+          >
+            {failed ? "Didn't send — try again" : 'Checking'}
+          </span>
+        )}
         <input
           ref={inputRef}
           type="text"
           value={settled ? (canonicalName ?? '') : value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (failed) setFailed(false);
+          }}
           // Typing a guess means reading the name off the minimap and
           // transcribing it, so focus holds the panel open -- see MiniMap's
           // `keepOpen`. Without it the loop was: click the field, move the

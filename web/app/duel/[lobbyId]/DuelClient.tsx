@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import MainMap, { type MainMapHandle } from '@/components/MainMap';
 import MiniMap from '@/components/MiniMap';
@@ -47,6 +47,10 @@ interface DuelState {
   settings: DuelSettings;
   countdownEndsAt: number | null;
   roundDeadlineAt: number | null;
+  /** The server's clock at the moment it built this snapshot. The deadlines
+   * above are absolute timestamps on that same clock, so this is what makes
+   * them comparable to ours. */
+  serverNow: number;
   roundSeq: number;
   currentRound: CurrentRound | null;
   lastRound: LastRound | null;
@@ -72,6 +76,15 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   // solo: the name is read off the panel and transcribed into the field.
   const [typing, setTyping] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+  // How far the server's clock is ahead of ours, in ms. See applyState.
+  const [clockOffset, setClockOffset] = useState(0);
+
+  // One poll in flight at a time, and a ticket per request so a slow response
+  // can't overwrite a newer one. See the poll effect and applyState.
+  const pollInFlightRef = useRef(false);
+  const ticketRef = useRef(0);
+  const appliedTicketRef = useRef(0);
+  const bestRttRef = useRef(Number.POSITIVE_INFINITY);
 
   const [displayedRoundSeq, setDisplayedRoundSeq] = useState<number | null>(null);
   const [displayedRound, setDisplayedRound] = useState<CurrentRound | null>(null);
@@ -93,11 +106,56 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     if (cached) setPlayerId(cached);
   }, [lobbyId]);
 
+  /**
+   * The single place a server snapshot becomes our state.
+   *
+   * Two jobs, both of which used to be missing.
+   *
+   * 1. Drop stale snapshots. Responses can land out of order -- a poll that
+   *    took three seconds arriving after the guess you sent two seconds later
+   *    -- and whichever landed last used to win. That could visibly revert a
+   *    round you had just completed. Every request takes an increasing ticket
+   *    and a response older than the newest one already applied is ignored.
+   *
+   * 2. Estimate the clock offset. Deadlines arrive as absolute timestamps on
+   *    the server's clock, so comparing them to our Date.now() bakes in
+   *    however far this machine's clock has drifted -- the reason one player
+   *    saw a 15-second countdown that is only ever 5 seconds long. This is
+   *    the NTP trick: assume the one-way delay is half the round trip, and
+   *    keep the sample from the FASTEST exchange seen, since a slow response
+   *    skews the estimate badly and a fast one barely can. Updated even for
+   *    snapshots we then discard -- a stale response is still a valid clock
+   *    reading.
+   */
+  const applyState = useCallback((next: DuelState, ticket: number, sentAt: number) => {
+    if (typeof next.serverNow === 'number') {
+      const rtt = performance.now() - sentAt;
+      if (rtt < bestRttRef.current) {
+        bestRttRef.current = rtt;
+        setClockOffset(next.serverNow + rtt / 2 - Date.now());
+      }
+    }
+    if (ticket < appliedTicketRef.current) return;
+    appliedTicketRef.current = ticket;
+    setState(next);
+  }, []);
+
   // Poll server state throughout the lobby's lifetime -- see PLAN.md: the
   // server is the sole timing authority, this is just how clients observe it.
   useEffect(() => {
     let cancelled = false;
     async function poll() {
+      // At most one poll outstanding. Without this the interval fired every
+      // POLL_MS regardless of whether the previous request had come back, so
+      // a server stall (measured on this deployment at ~3s for the slowest
+      // 1% of polls) stacked requests without bound -- four or five deep by
+      // the time the first returned, each one more work for a server that
+      // was already behind, and every one of them landing out of order. The
+      // pile-up fed itself and got worse with each extra player.
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      const ticket = ++ticketRef.current;
+      const sentAt = performance.now();
       try {
         // playerId doubles as the presence heartbeat the rematch vote counts
         // against -- see the state route. Read from the ref rather than the
@@ -113,9 +171,11 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
           return;
         }
         const data = await res.json();
-        setState(data.state);
+        applyState(data.state, ticket, sentAt);
       } catch {
         // transient network blip -- next tick tries again
+      } finally {
+        pollInFlightRef.current = false;
       }
     }
     poll();
@@ -124,7 +184,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [lobbyId]);
+  }, [lobbyId, applyState]);
 
   // Local ~5x/sec tick purely to re-render the live countdown/timer display
   // between polls -- the server's deadline timestamps are the actual truth.
@@ -183,6 +243,8 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   }, [state, displayedRoundSeq, displayedRound]);
 
   async function handleJoin(name: string) {
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     const res = await fetch(api(`/api/duel/${lobbyId}/join`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -192,44 +254,58 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     const data = await res.json();
     localStorage.setItem(playerIdKey(lobbyId), data.playerId);
     setPlayerId(data.playerId);
-    setState(data.state);
+    applyState(data.state, ticket, sentAt);
   }
 
   async function handleSettingsChange(settings: DuelSettings) {
     if (!playerId) return;
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     const res = await fetch(api(`/api/duel/${lobbyId}/settings`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, ...settings }),
     });
-    if (res.ok) setState((await res.json()).state);
+    if (res.ok) applyState((await res.json()).state, ticket, sentAt);
   }
 
   async function handleStart() {
     if (!playerId) return;
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     const res = await fetch(api(`/api/duel/${lobbyId}/start`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),
     });
-    if (res.ok) setState((await res.json()).state);
+    if (res.ok) applyState((await res.json()).state, ticket, sentAt);
   }
 
   async function handleGuess(guess: string): Promise<{ correct: boolean; canonicalName: string | null }> {
     if (!playerId) return { correct: false, canonicalName: null };
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     const res = await fetch(api(`/api/duel/${lobbyId}/guess`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, guess }),
     });
+    // Checked, where it wasn't before. A non-JSON error page (a 502 while the
+    // container is replaced, say) made res.json() reject with nothing to
+    // catch it, so the guess produced no flash, no shake and no message --
+    // it simply vanished, and "nothing happened" is indistinguishable from
+    // "the server is being slow". AnswerBox now shows this.
+    if (!res.ok) throw new Error(`guess rejected (${res.status})`);
     const data = await res.json();
-    setState(data.state);
+    applyState(data.state, ticket, sentAt);
     return { correct: !!data.correct, canonicalName: data.canonicalName ?? null };
   }
 
   async function handleRematch() {
     if (!playerId) return;
     setRematchError(null);
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     try {
       const res = await fetch(api(`/api/duel/${lobbyId}/rematch`), {
         method: 'POST',
@@ -243,7 +319,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
         setRematchError(data?.error ?? 'could not start a rematch');
         return;
       }
-      setState(data.state);
+      applyState(data.state, ticket, sentAt);
     } catch {
       setRematchError('could not reach the server');
     }
@@ -251,12 +327,14 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
 
   async function handleReport() {
     if (!playerId) return;
+    const ticket = ++ticketRef.current;
+    const sentAt = performance.now();
     const res = await fetch(api(`/api/duel/${lobbyId}/report`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),
     });
-    if (res.ok) setState((await res.json()).state);
+    if (res.ok) applyState((await res.json()).state, ticket, sentAt);
   }
 
   if (notFound) {
@@ -277,6 +355,11 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   const isJoined = !!playerId && state.players.some((p) => p.id === playerId);
   const isHost = !!playerId && playerId === state.hostPlayerId;
 
+  // The server's clock as best we can estimate it, which is what every
+  // deadline below must be measured against -- not this machine's clock. See
+  // applyState for how the offset is derived.
+  const serverNow = now + clockOffset;
+
   if (!isJoined) {
     return <JoinScreen onJoin={handleJoin} />;
   }
@@ -293,7 +376,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
   }
 
   if (state.status === 'countdown') {
-    const remaining = state.countdownEndsAt ? Math.max(0, Math.ceil((state.countdownEndsAt - now) / 1000)) : 0;
+    const remaining = state.countdownEndsAt ? Math.max(0, Math.ceil((state.countdownEndsAt - serverNow) / 1000)) : 0;
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p className="gw-eyebrow gw-breathe text-base">Get ready</p>
@@ -320,7 +403,7 @@ export default function DuelClient({ lobbyId }: { lobbyId: string }) {
     );
   }
 
-  const remainingSeconds = state.roundDeadlineAt ? Math.ceil((state.roundDeadlineAt - now) / 1000) : null;
+  const remainingSeconds = state.roundDeadlineAt ? Math.ceil((state.roundDeadlineAt - serverNow) / 1000) : null;
   const settled = transitionInfo !== null;
 
   return (

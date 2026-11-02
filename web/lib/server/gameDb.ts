@@ -10,6 +10,30 @@ function getDb(): DatabaseSync {
   const dbPath = process.env.GAME_DB_PATH;
   if (!dbPath) throw new Error('GAME_DB_PATH env var is not set (see web/.env.local)');
   db = new DatabaseSync(dbPath);
+
+  // These three matter more here than they would on a normal disk, because
+  // GAME_DB_PATH lives on a network-attached Railway volume and every call
+  // through DatabaseSync is SYNCHRONOUS -- it blocks the one event loop this
+  // process has. Storage latency is therefore request latency, for every
+  // player at once.
+  //
+  // Opened with no pragmas at all (which is how this was), SQLite defaults to
+  // a rollback journal and synchronous=FULL: each write creates a journal
+  // file, fsyncs, writes, fsyncs again, then deletes it. Four round trips to
+  // networked storage for one lobby save.
+  //
+  // WAL appends instead, and synchronous=NORMAL stops fsyncing on every
+  // commit (the WAL is still fsynced at checkpoints). The durability we give
+  // up is the last few moments of writes if the machine loses power --
+  // acceptable for lobbies and game rows, and the accounts table is
+  // write-rare. busy_timeout replaces an instant SQLITE_BUSY throw with a
+  // short wait, which matters now that readers and a writer can overlap.
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
+  `);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS games (
       id TEXT PRIMARY KEY,

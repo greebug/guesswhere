@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGrader } from '@/lib/server/grader';
 import { getLobby, saveLobby } from '@/lib/server/duelStore';
 import { buildPublicState, markSeen, tick } from '@/lib/server/duelLogic';
+import { logIfSlow } from '@/lib/server/slowLog';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ lobbyId: string }> }
 ) {
+  const startedAt = performance.now();
   const { lobbyId } = await params;
   const lobby = getLobby(lobbyId);
   if (!lobby) return NextResponse.json({ error: 'lobby not found' }, { status: 404 });
@@ -29,5 +31,7 @@ export async function GET(
 
   if (JSON.stringify(lobby) !== before) saveLobby(lobby);
 
-  return NextResponse.json({ state: buildPublicState(lobby, grader) });
+  const response = NextResponse.json({ state: buildPublicState(lobby, grader) });
+  logIfSlow(`state ${lobbyId}`, startedAt);
+  return response;
 }

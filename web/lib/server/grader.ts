@@ -122,7 +122,18 @@ export function getGrader(): Grader {
   if (!grader) {
     const dbPath = process.env.CITIES_DB;
     if (!dbPath) throw new Error('CITIES_DB env var is not set (see web/.env.local)');
+    const startedAt = performance.now();
     grader = buildGrader(dbPath);
+    // One line per process, because this is a module-level singleton. A
+    // SECOND one of these in the logs therefore means the process restarted --
+    // which is otherwise invisible from the outside, and is a prime suspect
+    // for a mid-match multi-second stall: every in-flight request dies with
+    // the old process and the replacement pays this build cost before it can
+    // serve anything.
+    console.warn(
+      `[grader] built in ${Math.round(performance.now() - startedAt)}ms, ` +
+        `rss=${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+    );
   }
   return grader;
 }
